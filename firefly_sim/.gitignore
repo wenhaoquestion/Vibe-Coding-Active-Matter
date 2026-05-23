@@ -1,0 +1,5 @@
+node_modules/
+dist/
+.tmp/
+public/wasm/firefly.js
+public/wasm/firefly.wasm

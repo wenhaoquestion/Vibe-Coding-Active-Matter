@@ -1,0 +1,243 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb,booktabs,hyperref}
+\title{Firefly Synchronization Lab: Model Notes}
+\author{C++/WebAssembly Interactive Simulator}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+This simulator is an idealized scientific toy model for collective synchronization. It is not calibrated to a particular firefly species or field data set. The goal is to expose how local interaction, frequency heterogeneity, noise, external light, and visibility blocking can produce global synchronization, local synchronization islands, or persistent disorder.
+
+\section{Notation}
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Symbol & Code parameter & Meaning \\
+\midrule
+$N$ & \texttt{N} & number of fireflies \\
+$L$ & \texttt{L} & square domain side length \\
+$\mathbf{x}_i=(x_i,y_i)$ & \texttt{x,y} & firefly position \\
+$\theta_i$ & \texttt{theta} & oscillator phase in $[0,2\pi)$ \\
+$\omega_i$ & \texttt{omega} & natural angular frequency \\
+$K$ & \texttt{K} & coupling strength \\
+$R_{\mathrm{visual}}$ & \texttt{R\_visual} & visual interaction radius \\
+$D$ & \texttt{D} & phase noise strength \\
+$\Delta t$ & \texttt{dt} & integration time step \\
+$\sigma_{\mathrm{flash}}$ & \texttt{sigma\_flash} & spike brightness width \\
+$r(t),\psi(t)$ & \texttt{metrics.r, metrics.psi} & global order and mean phase \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Initial Conditions}
+Positions are sampled uniformly in the square domain:
+\[
+x_i,y_i\sim U(0,L).
+\]
+Initial phases are random:
+\[
+\theta_i(0)\sim U(0,2\pi).
+\]
+For one species,
+\[
+\omega_i\sim \mathcal{N}(\omega_0,\sigma_\omega^2).
+\]
+For two species,
+\[
+\omega_i^{(A)}\sim \mathcal{N}(\omega_A,\sigma_\omega^2),\qquad
+\omega_i^{(B)}\sim \mathcal{N}(\omega_B,\sigma_\omega^2).
+\]
+
+\section{Spatial Neighbor Graph and Visibility Blocking}
+The Euclidean distance is
+\[
+d_{ij}=\|\mathbf{x}_i-\mathbf{x}_j\|.
+\]
+Without obstacles, adjacency is
+\[
+A_{ij}=
+\begin{cases}
+1,&0<d_{ij}\le R_{\mathrm{visual}},\\
+0,&\text{otherwise}.
+\end{cases}
+\]
+The neighbor count is
+\[
+k_i=\sum_j A_{ij}.
+\]
+If forest blocking is enabled, a circular obstacle removes an edge when the line segment between two fireflies intersects the obstacle disk:
+\[
+A_{ij}=\mathbb{I}(0<d_{ij}\le R_{\mathrm{visual}})
+\mathbb{I}(\mathrm{line}(i,j)\ \mathrm{not\ blocked}).
+\]
+
+\section{Spatial Kuramoto Model}
+For one species, the continuous model is
+\[
+\frac{d\theta_i}{dt}=
+\omega_i+
+\frac{K}{k_i}\sum_j A_{ij}\sin(\theta_j-\theta_i)+\xi_i(t),
+\]
+with zero coupling when $k_i=0$. The normalization by $k_i$ prevents dense neighborhoods from receiving artificially larger total forcing.
+
+\section{Noise and Stochastic Differential Equation}
+Noise is modeled as Brownian phase diffusion:
+\[
+d\theta_i=
+\left[\omega_i+\frac{K}{k_i}\sum_j A_{ij}\sin(\theta_j-\theta_i)\right]dt
++\sqrt{2D}\,dW_i(t).
+\]
+
+\section{Euler-Maruyama Discretization}
+The code advances phases by
+\[
+\theta_i(t+\Delta t)=
+\theta_i(t)+
+\left[\omega_i+\frac{K}{k_i}\sum_j A_{ij}\sin(\theta_j(t)-\theta_i(t))\right]\Delta t
++\sqrt{2D\Delta t}\,Z_i,
+\]
+where $Z_i\sim\mathcal{N}(0,1)$. After each step,
+\[
+\theta_i\leftarrow \theta_i\bmod 2\pi.
+\]
+
+\section{Flash Events and Brightness}
+The display supports three phase-derived brightness functions. Binary flashes use the phase wrap event:
+\[
+F_i(t)=
+\begin{cases}
+1,&\theta_i(t-\Delta t)>\theta_i(t),\\
+0,&\text{otherwise}.
+\end{cases}
+\]
+Cosine brightness is
+\[
+B_i(t)=\frac{1+\cos\theta_i(t)}{2}.
+\]
+Spike brightness is
+\[
+B_i(t)=\exp\left[-\frac{\operatorname{wrap}(\theta_i(t))^2}{2\sigma_{\mathrm{flash}}^2}\right],
+\]
+with
+\[
+\operatorname{wrap}(\theta)=((\theta+\pi)\bmod 2\pi)-\pi.
+\]
+
+\section{Global Kuramoto Order Parameter}
+The global order parameter is
+\[
+r(t)e^{i\psi(t)}=\frac{1}{N}\sum_{j=1}^N e^{i\theta_j(t)},
+\qquad
+r(t)=\left|\frac{1}{N}\sum_{j=1}^N e^{i\theta_j(t)}\right|.
+\]
+Values near zero indicate disorder; values near one indicate global phase alignment.
+
+\section{Local Synchronization Metric}
+Each firefly also receives a local order value:
+\[
+r_i^{\mathrm{local}}(t)=
+\left|\frac{1}{k_i}\sum_j A_{ij}e^{i\theta_j(t)}\right|.
+\]
+The displayed local mean is
+\[
+\bar r_{\mathrm{local}}(t)=\frac{1}{N}\sum_i r_i^{\mathrm{local}}(t).
+\]
+This separates global disorder from local synchronization islands.
+
+\section{Critical Coupling and Parameter Scanning}
+For a scan variable $q$, the simulator runs independent trials over sampled values and computes
+\[
+\bar r(q)=\frac{1}{M_T}\sum_{t>T_{\mathrm{burn}}} r(t).
+\]
+For $K$ scans, the critical coupling estimate is
+\[
+K_c=\min\{K:\bar r(K)>r_{\mathrm{threshold}}\}.
+\]
+The classical globally coupled Gaussian-frequency approximation,
+\[
+K_c=\frac{2\sqrt{2\pi}\sigma_\omega}{\pi},
+\]
+is only a reference. Local spatial coupling usually increases the observed threshold and makes it depend on
+\[
+K_c=K_c(\sigma_\omega,R_{\mathrm{visual}},N,D).
+\]
+
+\section{City Light External Forcing}
+City light is an external oscillator:
+\[
+\frac{d\theta_i}{dt}=
+\omega_i+
+\frac{K}{k_i}\sum_j A_{ij}\sin(\theta_j-\theta_i)
++\epsilon_{\mathrm{city}}\sin(\Omega_{\mathrm{city}}t+\phi_{\mathrm{city}}-\theta_i)
++\xi_i(t).
+\]
+Local city lights decay linearly to zero at their radius. Locking is summarized by
+\[
+\Delta_{\mathrm{lock}}=\left|\frac{d\psi}{dt}-\Omega_{\mathrm{city}}\right|.
+\]
+
+\section{Obstacles and Forest Blocking}
+Obstacles are circular tree disks. They do not move fireflies; they only alter the graph $A_{ij}$ by blocking line of sight. This can create high $\bar r_{\mathrm{local}}$ while global $r$ remains small.
+
+\section{Two-Species Extension}
+Two species use different natural frequencies and coupling:
+\[
+K_{ij}=
+\begin{cases}
+K_{\mathrm{in}},&s_i=s_j,\\
+K_{\mathrm{out}},&s_i\ne s_j.
+\end{cases}
+\]
+The update becomes
+\[
+\frac{d\theta_i}{dt}=
+\omega_i+\frac{1}{k_i}\sum_j A_{ij}K_{ij}\sin(\theta_j-\theta_i)+\xi_i(t).
+\]
+The UI reports species order parameters $r_A$ and $r_B$.
+
+\section{Firefly Motion and Bat Predators}
+When mobility is enabled, firefly positions evolve before the phase update. Each individual follows a correlated random walk:
+\[
+\alpha_i(t+\Delta t)=\alpha_i(t)+\sqrt{2D_{\mathrm{turn}}\Delta t}Z_i,
+\]
+\[
+\mathbf{v}_i^{\mathrm{random}}=
+v_{\mathrm{firefly}}
+\begin{bmatrix}\cos\alpha_i\\ \sin\alpha_i\end{bmatrix}
++\sqrt{2D_{\mathrm{move}}\Delta t}\boldsymbol{\eta}_i.
+\]
+Bat avoidance adds a repulsive velocity
+\[
+\mathbf{v}_i^{\mathrm{avoid}}=
+\sum_b
+\chi_{\mathrm{bat}}\left(1-\frac{d_{ib}}{R_{\mathrm{avoid}}}\right)_+
+\frac{\mathbf{x}_i-\mathbf{x}_b}{d_{ib}+\epsilon}.
+\]
+The total firefly velocity is
+\[
+\mathbf{v}_i=\mathbf{v}_i^{\mathrm{random}}+\mathbf{v}_i^{\mathrm{avoid}},
+\qquad
+\mathbf{x}_i(t+\Delta t)=\mathbf{x}_i(t)+\mathbf{v}_i\Delta t.
+\]
+Reflective boundary conditions keep all agents in $[0,L]^2$.
+
+Each bat patrols randomly unless a living firefly is inside its perception radius. Then it selects
+\[
+j^*=\arg\max_j\frac{B_j}{d_{bj}+\epsilon},
+\]
+so bright nearby fireflies are preferred. The bat turns smoothly toward $j^*$ and moves with speed bounded by $v_{\mathrm{bat}}$. If
+\[
+d_{ib}<R_{\mathrm{capture}},
+\]
+the firefly is marked not alive and no longer contributes to the order parameter, local neighborhoods, or rendering. Predator pressure is summarized with alive count, captured count, mean panic, nearest bat distance, and active bat target count.
+
+\section{Numerical Limitations and Future Work}
+The current neighbor search is $O(N^2)$ and is suitable for hundreds to a few thousand fireflies. Larger simulations should use spatial hashing or a GPU pipeline. The movement and predator rules are behavioral abstractions, not calibrated biomechanics or echolocation models. The model still has no pulse-response curve; that remains a natural extension.
+
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}
