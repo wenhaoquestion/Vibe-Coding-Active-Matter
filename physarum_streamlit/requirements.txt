@@ -1,0 +1,11 @@
+streamlit
+numpy
+scipy
+pandas
+matplotlib
+networkx
+pillow
+streamlit-autorefresh
+
+# Optional click-to-set coordinate support:
+# streamlit-image-coordinates

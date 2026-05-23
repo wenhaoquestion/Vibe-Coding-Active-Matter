@@ -1,0 +1,176 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,booktabs,geometry,hyperref}
+\geometry{margin=1in}
+
+\title{Formula Seed for a C++/WebAssembly Physarum Simulator}
+\author{Project specification seed}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{State}
+The world is a 2D domain $\Omega=[0,W)\times[0,H)$ advanced with time step
+$\Delta t$. Agent $i$ has
+\[
+X_i(t)=\bigl(p_i(t),\theta_i(t),E_i(t),m_i(t),\mu_i(t),a_i(t)\bigr),
+\]
+where $p_i\in\Omega$ is position, $\theta_i$ is heading, $E_i$ is energy,
+$m_i$ is biomass, $\mu_i\in\{\mathrm{search},\mathrm{exploit},
+\mathrm{dormant}\}$ is behavior mode, and $a_i$ is alive/dead status.
+
+Food source $k$ has
+\[
+F_k(t)=\bigl(f_k,C_k(t),q_k,\sigma_{A,k},r_k\bigr),
+\]
+where $C_k$ is remaining calories, $q_k$ is quality/attractiveness, and $r_k$
+is consumption radius.
+
+\section{Fields}
+Trail $T_t$ and food attractant $A_t$ are grid fields. The combined sensing
+field is
+\[
+S_t(x,y)=w_TT_t(x,y)+w_AA_t(x,y)-w_RR_t(x,y)-w_OO(x,y).
+\]
+Food attractant is
+\[
+A_t(x,y)=\sum_k q_k
+\frac{C_k(t)}{C_k(t)+C_{1/2}+\varepsilon}
+\exp\left(-\frac{\|(x,y)-f_k\|^2}{2\sigma_{A,k}^2}\right).
+\]
+Trail deposition by agents is
+\[
+D_t(x,y)=\sum_{i:a_i=1} q_0m_i(t)\phi_E(E_i)\phi_\mu(\mu_i)K_h((x,y)-p_i(t)).
+\]
+Trail evolves as
+\[
+T_{t+\Delta t}=(1-\lambda_T\Delta t)\left(G_{\sigma_T}*(T_t+D_t)\right).
+\]
+
+\section{Sensing and Motion}
+Let $u(\theta)=(\cos\theta,\sin\theta)^\top$. Sensor locations are
+\[
+z_i^\delta(t)=p_i(t)+d_su(\theta_i(t)+\delta\alpha),
+\qquad \delta\in\{-1,0,+1\}.
+\]
+The corresponding samples are $S_i^\delta=\mathcal I[S_t](z_i^\delta)$.
+The deterministic turn is
+\[
+\Delta\theta_i^{\mathrm{det}}=
+\begin{cases}
++\beta, & S_i^{+1}=\max_\delta S_i^\delta,\\
+-\beta, & S_i^{-1}=\max_\delta S_i^\delta,\\
+0, & S_i^{0}=\max_\delta S_i^\delta.
+\end{cases}
+\]
+Search probability can be modeled as
+\[
+P_i^{\mathrm{search}}=
+\sigma\!\left(k_E\left[\frac{E_i}{E_{\max}}-\theta_d\right]\right)
+\left(1-\sigma\!\left(k_S[S_i^{\max}-\tau_S]\right)\right),
+\]
+clipped to $[0,1]$. A weak signal and enough energy make continued search more
+likely.
+
+Food force is
+\[
+F_i^{\mathrm{food}}=\sum_k
+\frac{\chi(C_k>0)c_k}{\|f_k-p_i\|^2+\varepsilon}
+\frac{f_k-p_i}{\|f_k-p_i\|+\varepsilon}.
+\]
+Its angle is $\theta_F=\mathrm{atan2}(F_y,F_x)$. Hunger/energy blending uses
+\[
+\rho_i=\mathrm{clip}\left(\|F_i^{\mathrm{food}}\|
+\left(1-\frac{E_i}{E_{\max}}\right)^\eta,0,1\right),
+\]
+\[
+\theta_i(t+\Delta t)=
+\mathrm{wrap}\left((1-\rho_i)(\theta_i+\Delta\theta_i^{\mathrm{det}}+\xi_i)
++\rho_i\theta_F\right).
+\]
+Position update is
+\[
+p_i(t+\Delta t)=p_i(t)+v_0\psi_E(E_i)u(\theta_i(t+\Delta t))\Delta t.
+\]
+
+\section{Energy, Eating, Growth, Death}
+Energy loss is
+\[
+L_i(t)=\Delta t\left(c_bm_i+c_mv_i^2m_i+c_s\mathbf 1_{\mu_i=\mathrm{search}}\right).
+\]
+If $d_{ik}=\|p_i-f_k\|<r_k$, food gain is
+\[
+G_{ik}(t)=\min\{C_k(t),\eta_{\mathrm{eat}}q_k\Delta t\},
+\qquad
+C_k(t+\Delta t)=C_k(t)-\sum_i G_{ik}(t).
+\]
+Agent energy is
+\[
+\hat E_i(t+\Delta t)=\mathrm{clip}\left(E_i(t)+\eta_E\sum_k G_{ik}(t)-L_i(t),0,E_{\max}\right).
+\]
+Growth occurs only when energy is above a threshold:
+\[
+\Delta m_i=r_g\left[\frac{\hat E_i}{E_{\max}}-\theta_g\right]_+m_i\Delta t,
+\qquad
+E_i(t+\Delta t)=\hat E_i-\kappa_g\Delta m_i.
+\]
+Division can occur when
+\[
+m_i>m_{\mathrm{split}},\qquad E_i>E_{\mathrm{split}}.
+\]
+Death occurs after sustained starvation:
+\[
+E_i(t)=0 \text{ for } \tau_{\mathrm{dead}} \text{ steps}.
+\]
+
+\section{Adaptive Nutrient Transport Network}
+Build a graph $G=(V,E)$ from food sources, sampled trail ridges, and optional
+user-placed nodes. Each edge $e=(u,v)$ has length $\ell_e$ and conductivity
+$D_e(t)$. With incidence matrix $B$,
+\[
+C_e(t)=\frac{D_e(t)}{\ell_e+\varepsilon},\qquad
+L_D(t)=B\,\mathrm{diag}(C_e(t))\,B^\top.
+\]
+Pressure solves
+\[
+L_D(t)P(t)=b(t),
+\]
+with a fixed gauge such as one sink pressure set to zero. Edge flow is
+\[
+Q_e(t)=C_e(t)(P_u(t)-P_v(t)).
+\]
+The original Tero-style rule is
+\[
+\dot D_e=|Q_e|-D_e.
+\]
+An interactive bounded variant is
+\[
+D_e(t+\Delta t)=\max\left(D_{\min},
+D_e(t)+\Delta t\left[
+\alpha_D\frac{|Q_e|^\gamma}{|Q_e|^\gamma+q_0^\gamma+\varepsilon}
+-\mu_DD_e(t)
+\right]\right).
+\]
+The displayed shortest nutrient path can use Dijkstra with
+\[
+c_e^{\mathrm{path}}=\frac{\ell_e}{(D_e+\varepsilon)^\eta}
++\lambda_r R_e^{\mathrm{risk}}+\lambda_o O_e.
+\]
+Report total path length
+\[
+L_{\mathrm{path}}=\sum_{e\in P}\ell_e,
+\]
+transport cost
+\[
+J_{\mathrm{transport}}=\sum_{e\in E}\ell_eD_e,
+\]
+and dissipation
+\[
+\mathcal E_{\mathrm{diss}}=\sum_{e\in E}\frac{\ell_e}{D_e+\varepsilon}Q_e^2.
+\]
+
+\section{References To Cite In Final Document}
+Nakagaki et al. (2000), Tero et al. (2007), Jones (2010), Bonifaci et al.
+(2012/2013), Kay et al. (2022), and MDN/Emscripten WebAssembly documentation.
+
+\end{document}

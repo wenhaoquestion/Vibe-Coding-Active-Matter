@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="720" viewBox="0 0 1200 720" role="img" aria-label="Physarum simulation screenshot placeholder">
+  <rect width="1200" height="720" fill="#05070a"/>
+  <rect x="34" y="34" width="300" height="652" fill="#0c1113" stroke="#29413b"/>
+  <rect x="370" y="34" width="796" height="652" fill="#071012" stroke="#29413b"/>
+  <path d="M450 470 C560 290 650 510 760 320 S940 250 1040 430" fill="none" stroke="#7ee6bf" stroke-width="9" stroke-linecap="round" opacity="0.72"/>
+  <path d="M450 470 C620 385 720 390 1040 430" fill="none" stroke="#ffe577" stroke-width="5" stroke-linecap="round" opacity="0.95"/>
+  <circle cx="450" cy="470" r="32" fill="#ffb840"/>
+  <circle cx="1040" cy="430" r="26" fill="#ffb840"/>
+  <circle cx="705" cy="380" r="46" fill="#73e3bd" opacity="0.42"/>
+  <text x="62" y="82" fill="#e8f0ea" font-family="system-ui, sans-serif" font-size="28" font-weight="700">Physarum Lab</text>
+  <text x="62" y="124" fill="#9fb2ad" font-family="system-ui, sans-serif" font-size="17">screenshot placeholder</text>
+  <text x="410" y="94" fill="#d7e7df" font-family="system-ui, sans-serif" font-size="20">Interactive slime mold transport network</text>
+</svg>

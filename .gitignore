@@ -1,0 +1,31 @@
+.DS_Store
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.streamlit/
+
+# JavaScript / Vite
+node_modules/
+dist/
+.vite/
+
+# C++ / CMake / Emscripten
+build/
+cmake-build-*/
+cpp/build-*/
+public/wasm/
+
+# LaTeX build output
+docs/*.aux
+docs/*.bbl
+docs/*.blg
+docs/*.fdb_latexmk
+docs/*.fls
+docs/*.log
+docs/*.out
+docs/*.synctex.gz

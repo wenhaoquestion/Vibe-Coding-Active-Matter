@@ -1,0 +1,259 @@
+:root {
+  color-scheme: dark;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: #05070a;
+  color: #e8f0ea;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  overflow: hidden;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.app-shell {
+  display: grid;
+  grid-template-columns: minmax(320px, 380px) minmax(0, 1fr);
+  width: 100vw;
+  height: 100vh;
+  background:
+    linear-gradient(90deg, rgba(10, 16, 18, 0.98), rgba(5, 7, 10, 0.96)),
+    #05070a;
+}
+
+.side-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  height: 100vh;
+  padding: 18px 16px 22px;
+  overflow-y: auto;
+  border-right: 1px solid rgba(154, 227, 200, 0.14);
+  background: #0c1113;
+}
+
+.panel-header h1 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.05;
+  letter-spacing: 0;
+}
+
+.panel-header p {
+  margin: 7px 0 0;
+  color: #9fb2ad;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.load-status {
+  padding: 8px 10px;
+  border: 1px solid rgba(112, 229, 190, 0.22);
+  background: rgba(28, 72, 61, 0.24);
+  color: #b8f6db;
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.load-status.failed {
+  border-color: rgba(255, 120, 110, 0.35);
+  background: rgba(92, 31, 32, 0.38);
+  color: #ffc5bd;
+}
+
+.tool-block,
+.action-block,
+.metrics,
+.inspect,
+.params {
+  border-top: 1px solid rgba(232, 240, 234, 0.1);
+  padding-top: 12px;
+}
+
+h2 {
+  margin: 0 0 9px;
+  color: #dfe9e3;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.tool-grid,
+.action-block {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+button {
+  min-height: 34px;
+  border: 1px solid rgba(232, 240, 234, 0.14);
+  border-radius: 6px;
+  background: #151d1f;
+  color: #ecf6f0;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+button:hover {
+  border-color: rgba(120, 233, 194, 0.6);
+  background: #1b2928;
+}
+
+button.active {
+  border-color: rgba(255, 196, 82, 0.78);
+  background: #342711;
+  color: #ffe7a6;
+}
+
+.metrics dl {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 7px 12px;
+  margin: 0;
+  font-size: 12px;
+}
+
+.metrics dt {
+  color: #9fb2ad;
+}
+
+.metrics dd {
+  margin: 0;
+  color: #f3f7f2;
+  font-variant-numeric: tabular-nums;
+}
+
+.inspect pre {
+  min-height: 80px;
+  margin: 0;
+  padding: 10px;
+  overflow: auto;
+  border: 1px solid rgba(232, 240, 234, 0.1);
+  background: #080d0e;
+  color: #b8c9c2;
+  font-family: "SFMono-Regular", Consolas, monospace;
+  font-size: 11px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+}
+
+.params details {
+  border-bottom: 1px solid rgba(232, 240, 234, 0.08);
+  padding: 9px 0;
+}
+
+.params summary {
+  cursor: pointer;
+  color: #e5ece8;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.control-grid {
+  display: grid;
+  gap: 8px;
+  padding-top: 10px;
+}
+
+.control-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 1fr) minmax(86px, 110px);
+  gap: 10px;
+  align-items: center;
+  color: #aebfba;
+  font-size: 12px;
+}
+
+.control-row input,
+.control-row select {
+  width: 100%;
+  min-height: 28px;
+  border: 1px solid rgba(232, 240, 234, 0.12);
+  border-radius: 4px;
+  background: #070b0c;
+  color: #f2f6f3;
+  padding: 4px 6px;
+  font-size: 12px;
+}
+
+.checkbox-row {
+  grid-template-columns: minmax(120px, 1fr) 28px;
+}
+
+.checkbox-row input {
+  min-height: 18px;
+  accent-color: #73e3bd;
+}
+
+.stage {
+  position: relative;
+  min-width: 0;
+  height: 100vh;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 70% 20%, rgba(242, 174, 75, 0.09), transparent 30%),
+    linear-gradient(145deg, #05070a, #091113 58%, #07090c);
+}
+
+#sim-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: crosshair;
+}
+
+.canvas-hud {
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  max-width: 720px;
+  padding: 9px 11px;
+  border: 1px solid rgba(232, 240, 234, 0.12);
+  background: rgba(5, 8, 9, 0.76);
+  color: #d7e7df;
+  font-size: 12px;
+  line-height: 1.35;
+  backdrop-filter: blur(8px);
+}
+
+@media (max-width: 860px) {
+  body {
+    overflow: auto;
+  }
+
+  .app-shell {
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 100vh;
+  }
+
+  .side-panel {
+    height: auto;
+    max-height: none;
+    border-right: 0;
+    border-bottom: 1px solid rgba(154, 227, 200, 0.14);
+  }
+
+  .stage {
+    height: min(78vh, 720px);
+  }
+}

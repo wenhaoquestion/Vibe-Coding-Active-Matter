@@ -1,0 +1,10 @@
+node_modules/
+dist/
+cpp/build-*/
+public/wasm/
+docs/*.aux
+docs/*.bbl
+docs/*.blg
+docs/*.log
+docs/*.out
+docs/*.pdf

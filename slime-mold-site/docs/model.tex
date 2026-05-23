@@ -1,0 +1,238 @@
+\documentclass[11pt]{article}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath}
+\usepackage{array}
+\usepackage{hyperref}
+
+\title{Interactive Energy-Aware Physarum Slime Mold Simulation}
+\author{Slime Mold WebAssembly Simulation}
+\date{}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+This document describes a browser-based simulation of \emph{Physarum polycephalum}
+for interactive exploration of food search, energy-aware movement, trail-mediated
+collective behavior, and adaptive nutrient transport networks. The implementation
+uses C++20 for the simulation core, WebAssembly for browser execution, and a
+TypeScript canvas interface for rendering and parameter control.
+\end{abstract}
+
+\section{Model Assumptions}
+The model is not a full biological reconstruction. It combines a Jones-style
+particle approximation of slime mold morphology with a simplified Physarum-inspired
+transport graph. Agents are point particles with local sensing, energy budgets,
+food consumption, death, and reproduction. The trail field approximates extracellular
+chemoattractant and tube reinforcement. Food scent is a diffuse attractor field.
+Walls are represented by a repellent field. A low-resolution graph is extracted
+from high-trail grid cells and food nodes, then updated with approximate pressure,
+flow, and conductivity dynamics.
+
+\section{Variables and Parameters}
+\begin{center}
+\begin{tabular}{>{\raggedright\arraybackslash}p{0.25\linewidth}
+                >{\raggedright\arraybackslash}p{0.62\linewidth}}
+\hline
+Symbol or parameter & Meaning \\
+\hline
+$p_i$ & Agent $i$ position in the two-dimensional grid. \\
+$\theta_i$ & Agent heading angle. \\
+$E_i$ & Agent energy. \\
+$T(x,y)$ & Slime trail or chemoattractant field. \\
+$F(x,y)$ & Food scent field. \\
+$R(x,y)$ & Wall or repellent field. \\
+$d_s$ & Sensor distance. \\
+$\alpha$ & Sensor angular offset. \\
+$w_T,w_F,w_R$ & Trail, food, and repellent sensing weights. \\
+$v_{\min},v_{\max}$ & Minimum and maximum agent speed. \\
+$C_j$ & Remaining calories at food source $j$. \\
+$q_i$ & Trail deposited by agent $i$. \\
+$D_T,\lambda_T$ & Trail diffusion and decay coefficients. \\
+$D_{ij}$ & Graph edge conductivity. \\
+$Q_{ij}$ & Nutrient flow along graph edge $i,j$. \\
+$P_i$ & Pressure at graph node $i$. \\
+$b_i$ & Source or sink term at graph node $i$. \\
+\hline
+\end{tabular}
+\end{center}
+
+\section{Agent Chemotaxis Model}
+Each agent has a heading unit vector
+\begin{equation}
+\label{eq:heading}
+u(\theta) = (\cos \theta, \sin \theta).
+\end{equation}
+Three sensors are placed in front of the agent:
+\begin{align}
+\label{eq:sensors}
+x_F &= p_i + d_s u(\theta_i),\\
+x_L &= p_i + d_s u(\theta_i + \alpha),\\
+x_R &= p_i + d_s u(\theta_i - \alpha).
+\end{align}
+For $k \in \{L,F,R\}$, the sampled sensor score is
+\begin{equation}
+\label{eq:sensor-score}
+S_k = w_T T(x_k) + w_F F(x_k) - w_R R(x_k) + \eta_k,
+\end{equation}
+where $\eta_k$ is a small random perturbation. If the front sensor is strongest,
+the agent keeps its heading. If the front sensor is weakest, the agent turns
+randomly left or right. Otherwise it turns toward the stronger lateral sensor.
+The position update is
+\begin{equation}
+\label{eq:position-update}
+p_i(t + \Delta t) = p_i(t) + v_i(E_i)\Delta t\,u(\theta_i).
+\end{equation}
+Speed depends on energy:
+\begin{equation}
+\label{eq:energy-speed}
+v_i(E_i) = v_{\min} + (v_{\max} - v_{\min})
+\operatorname{clamp}\left(\frac{E_i}{E_{\max}},0,1\right).
+\end{equation}
+
+\section{Food Attraction and Consumption}
+Food applies a hunger-weighted directional bias. The raw food force is
+\begin{equation}
+\label{eq:food-force}
+F^{\mathrm{food}}_i =
+\sum_j c_j \frac{p^{\mathrm{food}}_j - p_i}
+{\lVert p^{\mathrm{food}}_j - p_i \rVert^2 + \epsilon},
+\end{equation}
+where $c_j$ is proportional to remaining calories and attractor strength.
+The heading is mixed toward the force angle with
+\begin{equation}
+\label{eq:food-beta}
+\beta_i =
+\operatorname{clamp}\left(
+\lVert F^{\mathrm{food}}_i \rVert
+\left(1 - \frac{E_i}{E_{\max}}\right)^\gamma,0,1
+\right).
+\end{equation}
+If an agent is inside a food radius, it consumes
+$\min(C_j,\mathrm{eatRate}\Delta t)$ calories and converts them to energy with
+the food efficiency parameter.
+
+\section{Energy Budget}
+Agent energy is updated by
+\begin{equation}
+\label{eq:energy-budget}
+E_i(t+\Delta t) =
+\operatorname{clamp}\left(
+E_i(t)
+- c_{\mathrm{base}}\Delta t
+- c_{\mathrm{move}}v_i\Delta t
+- c_{\mathrm{sensor}}n_s\Delta t
+- c_{\mathrm{trail}}q_i\Delta t
++ E^{\mathrm{food}}_i,
+0,E_{\max}
+\right).
+\end{equation}
+Here $n_s=3$ is the number of sensors. Trail deposition is energy-scaled:
+\begin{equation}
+\label{eq:trail-deposit}
+q_i = q_{\mathrm{base}}\operatorname{clamp}\left(\frac{E_i}{E_{\max}},0,1\right).
+\end{equation}
+
+\section{Growth, Reproduction, Dormancy, and Death}
+If $E_i > E_{\mathrm{split}}$, an agent may divide with probability
+$p_{\mathrm{split}}\Delta t$. Parent and child split the energy according to
+a split ratio, and the child receives a perturbed heading. If energy drops below
+$E_{\mathrm{low}}$, speed and trail secretion are reduced to model dormancy. If
+energy remains below $E_{\mathrm{dead}}$ longer than the death time, the agent is
+marked dead and no longer participates in the simulation.
+
+\section{Search-versus-Exploit Decision}
+The probability of continuing exploratory search is
+\begin{equation}
+\label{eq:p-search}
+P^{\mathrm{search}}_i =
+\sigma\left(
+a_0
++ a_E\frac{E_i}{E_{\max}}
+- a_F\,\mathrm{localFood}_i
+- a_T\,\mathrm{localTrail}_i
++ a_N\,\mathrm{novelty}_i
+- a_C\,\mathrm{localCost}_i
+\right),
+\end{equation}
+where $\sigma(z)=1/(1+e^{-z})$. Search mode increases random exploration and
+reduces food/trail exploitation; exploit mode does the reverse.
+
+\section{Trail Deposition, Diffusion, and Decay}
+The trail field evolves according to
+\begin{equation}
+\label{eq:trail-diffusion}
+T(t+\Delta t) =
+(1-\lambda_T\Delta t)\left(T(t)+D_T\Delta t\nabla^2 T\right).
+\end{equation}
+The implementation uses an explicit five-point Laplacian with internal substeps
+when diffusion and time step combinations would otherwise be unstable. Trail values
+are clamped to $[0,T_{\max}]$, and wall cells force trail to zero.
+
+\section{Nutrient Transport Graph}
+A low-resolution graph is sampled every \texttt{graphStride} grid cells. Cells with
+$T(x,y)$ above the trail threshold become active nodes. Food sources are always
+inserted as source nodes, and the live colony center is inserted as a sink node.
+Adjacent active grid nodes become graph edges with length $L_{ij}$ and conductivity
+$D_{ij}$.
+
+\section{Flow-Conductivity Feedback}
+Edge flow is modeled as
+\begin{equation}
+\label{eq:flow}
+Q_{ij} = \frac{D_{ij}}{L_{ij}+\epsilon}(P_i-P_j).
+\end{equation}
+At each node, approximate conservation is
+\begin{equation}
+\label{eq:conservation}
+\sum_j Q_{ij} = b_i.
+\end{equation}
+The pressure system is solved with Gauss-Seidel relaxation. Conductivity follows
+\begin{equation}
+\label{eq:conductivity-ode}
+\frac{dD_{ij}}{dt} = \alpha_D |Q_{ij}|^\mu - \lambda_D D_{ij},
+\end{equation}
+with the discrete update clamped to configured minimum and maximum conductivities.
+High-flow paths thicken; low-flow paths decay.
+
+\section{Shortest Nutrient Path Optimization}
+For shortest nutrient paths, Dijkstra uses the edge weight
+\begin{equation}
+\label{eq:path-weight}
+w_{ij} = \frac{L_{ij}}{D_{ij}+\epsilon}
++ \lambda_{\mathrm{energy}}\mathrm{movementCost}_{ij}.
+\end{equation}
+The displayed highlighted path is the lowest-cost path from food nodes to the
+colony sink. Transport cost and efficiency are
+\begin{align}
+\label{eq:transport-cost}
+\mathrm{transportCost} &=
+\sum_{\mathrm{edges}} \frac{Q_{ij}^2 L_{ij}}{D_{ij}+\epsilon},\\
+\label{eq:efficiency}
+\mathrm{efficiency} &=
+\frac{\mathrm{deliveredNutrients}}
+{\mathrm{transportCost}+\epsilon}.
+\end{align}
+
+\section{Numerical Methods}
+The simulation uses fixed substeps inside each animation frame. Trail diffusion
+uses explicit finite differences with stability substepping. Pressure is solved
+approximately by Gauss-Seidel iterations with one pressure fixed to remove the
+null space. Dijkstra is run on the current low-resolution graph. Randomness comes
+from a deterministic xorshift generator seeded by the UI.
+
+\section{Limitations and Future Work}
+The model uses point particles and a scalar trail field rather than a deformable
+continuous organism. Food scent is rebuilt from sources rather than diffused as a
+separate PDE. The network graph is sampled from grid points, so ridge extraction
+and branch-point detection are approximate. Future work could add WebGL rendering,
+obstacles with richer geometry, persistent graph conductivity across rebuilds,
+multi-species competition, better tube-width visualization, and calibrated
+biophysical parameters.
+
+\section{References}
+\nocite{*}
+\bibliographystyle{plain}
+\bibliography{references}
+
+\end{document}

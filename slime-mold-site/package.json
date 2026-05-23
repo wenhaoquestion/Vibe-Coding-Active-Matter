@@ -1,0 +1,18 @@
+{
+  "name": "slime-mold-site",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "tsc && vite build",
+    "build:wasm": "bash scripts/build_wasm.sh",
+    "test": "vitest run && npm run test:cpp",
+    "test:cpp": "cmake -S cpp -B cpp/build-native && cmake --build cpp/build-native && ctest --test-dir cpp/build-native --output-on-failure"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "vite": "^6.3.5",
+    "vitest": "^3.1.4"
+  }
+}

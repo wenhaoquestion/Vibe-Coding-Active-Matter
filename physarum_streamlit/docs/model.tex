@@ -1,0 +1,656 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath, amssymb, amsfonts}
+\usepackage{booktabs}
+\usepackage{geometry}
+\usepackage{hyperref}
+\usepackage{natbib}
+\geometry{margin=1in}
+
+\title{Mathematical Model for an Interactive Physarum Slime Mold Simulator}
+\author{Generated for the Streamlit Physarum Simulator}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+This document defines the mathematical model implemented by the interactive
+Streamlit simulator for \emph{Physarum polycephalum}. The simulator combines a
+local multi-agent model with trail fields, food attractants, energy dynamics,
+growth, division, dormancy, death, and a graph-based adaptive transport-network
+solver. This simulator is an idealized computational model. It is inspired by
+Physarum behavior and published mathematical models, but it is not a calibrated
+biological model.
+
+\section{Biological and Computational Motivation}
+The maze-solving experiments of \citet{Nakagaki2000Maze} motivate the idea that
+Physarum can restructure its body and transport tubes to connect nutrient
+locations efficiently. The adaptive conductance network model of
+\citet{Tero2007Adaptive} and the network-design rules of
+\citet{Tero2010Rules} motivate the pressure, flow, and tube-conductance layer.
+The multi-agent sensing and trail-field approach follows the computational
+spirit of the Jones models \citep{Jones2010Pattern,Jones2011Influences}. The
+shortest-path overlay is included because standard Physarum models are known to
+have shortest-path convergence properties in mathematical settings
+\citep{Bonifaci2013Shortest}. Finally, the food quality and nutritional
+decision variables are idealized abstractions inspired by the nutritional
+choice behavior described by \citet{Dussutour2010Nutrition}.
+
+\section{Domain, Time, and State Space}
+Time is discrete:
+\begin{equation}
+  t_n = n\Delta t,\qquad n=0,1,2,\ldots,
+\end{equation}
+with default step size $\Delta t=1$. The discrete computational domain is
+\begin{equation}
+  \Omega = \{0,1,\ldots,W-1\}\times \{0,1,\ldots,H-1\}.
+\end{equation}
+Agent positions are continuous points in the embedded rectangle
+\begin{equation}
+  \bar{\Omega}=[0,W)\times[0,H).
+\end{equation}
+Fields are stored on the grid $\Omega$. For a grid field $F$ and a continuous
+point $z=(x,y)\in\bar{\Omega}$, the simulator uses bilinear interpolation,
+written $\mathcal{I}[F](z)$. If $x_0=\lfloor x\rfloor$, $y_0=\lfloor y\rfloor$,
+$\delta_x=x-x_0$, and $\delta_y=y-y_0$, then
+\begin{align}
+  \mathcal{I}[F](x,y)
+  &=
+  (1-\delta_x)(1-\delta_y)F_{y_0,x_0}
+  +\delta_x(1-\delta_y)F_{y_0,x_0+1} \nonumber\\
+  &\quad +(1-\delta_x)\delta_y F_{y_0+1,x_0}
+  +\delta_x\delta_y F_{y_0+1,x_0+1},
+\end{align}
+with boundary indices either wrapped or clipped according to the boundary mode.
+
+\section{Agent State Variables}
+There are $N(t)$ agents at time $t$. Agent $i$ has state
+\begin{equation}
+  X_i(t)=\left(p_i(t),\theta_i(t),E_i(t),m_i(t),a_i(t),\mu_i(t)\right).
+\end{equation}
+The variables are:
+\begin{itemize}
+  \item $p_i(t)=(x_i(t),y_i(t))\in\bar{\Omega}$, the continuous position.
+  \item $\theta_i(t)\in(-\pi,\pi]$, the heading angle.
+  \item $E_i(t)\in[0,E_{\max}]$, the internal energy.
+  \item $m_i(t)>0$, the biomass or mass.
+  \item $a_i(t)\in\{0,1\}$, the alive indicator.
+  \item $\mu_i(t)\in\{\mathrm{search},\mathrm{exploit},\mathrm{dormant}\}$,
+  the behavior mode.
+\end{itemize}
+The implementation stores positions as an $N\times 2$ array and headings,
+energies, masses, alive indicators, and mode labels as one-dimensional arrays.
+
+\section{Food Source Variables}
+There are $M(t)$ food sources. Food source $k$ has state
+\begin{equation}
+  F_k(t)=\left(f_k,C_k(t),q_k,\sigma_{A,k},r_{F,k}\right),
+\end{equation}
+where $f_k=(u_k,v_k)\in\bar{\Omega}$ is the location, $C_k(t)\ge 0$ is remaining
+abstract calories, $q_k>0$ is a quality or attractiveness multiplier, and
+$\sigma_{A,k}>0$ is the attractant spread scale. The parameter $r_{F,k}>0$ is
+an interactive food size used for visualization and for widening the local
+consumption neighborhood. A food source is active when
+\begin{equation}
+  C_k(t)>C_{\min}.
+\end{equation}
+
+\section{Environment Fields}
+The simulator maintains four grid fields:
+\begin{align}
+  T_t(x,y)&\ge 0 && \text{trail or chemoattractant deposited by agents},\\
+  A_t(x,y)&\ge 0 && \text{food attractant},\\
+  O(x,y)&\in\{0,1\} && \text{obstacle mask, with 1 meaning blocked},\\
+  R_t(x,y)&\ge 0 && \text{optional repellent or hazard field}.
+\end{align}
+The combined sensory field is
+\begin{equation}
+  S_t(x,y)=w_TT_t(x,y)+w_AA_t(x,y)-w_OO(x,y)-w_RR_t(x,y).
+\end{equation}
+The default obstacle weight is large, $w_O=10^3$, so obstacle cells are strongly
+repellent.
+
+\section{Gaussian Diffusion and Field Sampling}
+The ideal discrete Gaussian kernel is
+\begin{equation}
+  G_\sigma(r)=\frac{1}{Z_\sigma}\exp\left(-\frac{\|r\|_2^2}{2\sigma^2}\right),
+  \qquad r\in\mathbb{Z}^2,
+\end{equation}
+where $Z_\sigma$ normalizes the kernel so that
+\begin{equation}
+  \sum_{r\in\mathbb{Z}^2}G_\sigma(r)=1.
+\end{equation}
+In code, convolution by $G_\sigma$ is implemented using
+\texttt{scipy.ndimage.gaussian\_filter}. The trail update is
+\begin{equation}
+  T_{t+\Delta t}=(1-\lambda_T\Delta t)
+  \left[G_{\sigma_T}*(T_t+D_t)\right],
+\end{equation}
+followed by nonnegative clipping:
+\begin{equation}
+  T_{t+\Delta t}(x,y)\leftarrow \max\{0,T_{t+\Delta t}(x,y)\}.
+\end{equation}
+
+\section{Trail Deposition}
+Each alive, non-dormant agent deposits trail at its current position. The
+deposition amount is
+\begin{equation}
+  q_i^T(t)=q_0\,m_i(t)\,\phi_E(E_i(t))\,\phi_\mu(\mu_i(t)),
+\end{equation}
+where
+\begin{equation}
+  \phi_E(E)=\operatorname{clip}\left(\frac{E}{E_{\max}},0,1\right)
+\end{equation}
+and
+\begin{equation}
+  \phi_\mu(\mu)=
+  \begin{cases}
+  1, & \mu=\mathrm{search},\\
+  \rho_{\mathrm{exploit}}, & \mu=\mathrm{exploit},\\
+  0, & \mu=\mathrm{dormant}.
+  \end{cases}
+\end{equation}
+The default is $\rho_{\mathrm{exploit}}=1.2$. The deposition field is
+\begin{equation}
+  D_t(x,y)=\sum_{i:a_i(t)=1}q_i^T(t)K_h((x,y)-p_i(t)).
+\end{equation}
+The implementation uses bilinear splatting. If an agent lies at $(x,y)$ with
+fractional offsets $\delta_x$ and $\delta_y$, its amount is split among the four
+neighboring grid cells with weights
+\begin{equation}
+  (1-\delta_x)(1-\delta_y),\quad
+  \delta_x(1-\delta_y),\quad
+  (1-\delta_x)\delta_y,\quad
+  \delta_x\delta_y.
+\end{equation}
+
+\section{Food Attractant Field}
+At each step, active food sources define the attractant
+\begin{equation}
+  A_t(x,y)=\sum_{k=1}^{M(t)}
+  q_k h(C_k(t))
+  \exp\left(-\frac{\|(x,y)-f_k\|_2^2}{2\sigma_{A,k}^2}\right).
+\end{equation}
+The default calorie response is saturating:
+\begin{equation}
+  h(C)=\frac{C}{C+C_{1/2}+\varepsilon}.
+\end{equation}
+This prevents very large food sources from dominating the entire world. A
+simpler optional conceptual transform is $h(C)=C/C_{\mathrm{scale}}$, but the
+implementation uses the saturating form by default.
+
+\section{Agent Sensing}
+For heading $\theta$, define
+\begin{equation}
+  u(\theta)=
+  \begin{bmatrix}
+  \cos\theta\\
+  \sin\theta
+  \end{bmatrix}.
+\end{equation}
+The front, left, and right sensor coordinates are
+\begin{align}
+  z_i^0(t)&=p_i(t)+d_su(\theta_i(t)),\\
+  z_i^L(t)&=p_i(t)+d_su(\theta_i(t)+\alpha),\\
+  z_i^R(t)&=p_i(t)+d_su(\theta_i(t)-\alpha).
+\end{align}
+Their sampled values are
+\begin{align}
+  S_i^0(t)&=\mathcal{I}[S_t](z_i^0(t)),\\
+  S_i^L(t)&=\mathcal{I}[S_t](z_i^L(t)),\\
+  S_i^R(t)&=\mathcal{I}[S_t](z_i^R(t)).
+\end{align}
+If a sensor lies outside the world in bounce mode, its value is set to a strong
+repellent value. In wrap mode, sensor coordinates are taken modulo $(W,H)$.
+
+\section{Turning and Motion}
+Let
+\begin{equation}
+  S_i^{\max}(t)=\max\{S_i^0(t),S_i^L(t),S_i^R(t)\}.
+\end{equation}
+Let $\delta_i(t)\in\{0,+1,-1\}$ select the largest sensor, where $0$ denotes
+front, $+1$ left, and $-1$ right. The deterministic turn is
+\begin{equation}
+  \Delta\theta_i^{\mathrm{det}}(t)=
+  \begin{cases}
+  +\beta, & \delta_i(t)=+1,\\
+  -\beta, & \delta_i(t)=-1,\\
+  0, & \delta_i(t)=0.
+  \end{cases}
+\end{equation}
+If the agent is searching or the local maximum signal is weak, the model adds
+random exploration $\xi_i(t)\sim\mathcal{N}(0,\sigma_\theta^2)$. The heading is
+\begin{equation}
+  \theta_i(t+\Delta t)=
+  \operatorname{wrap}_{(-\pi,\pi]}
+  \left(\theta_i(t)+\Delta\theta_i^{\mathrm{det}}(t)+\chi_i(t)\xi_i(t)\right),
+\end{equation}
+where $\chi_i(t)=1$ for search mode or $S_i^{\max}(t)<\tau_S$ and is zero
+otherwise.
+
+The energy speed factor is
+\begin{equation}
+  \psi_E(E)=\operatorname{clip}
+  \left(
+  \frac{v_{\min}}{v_0}
+  +\left(1-\frac{v_{\min}}{v_0}\right)\frac{E}{E_{\max}},
+  \frac{v_{\min}}{v_0},1
+  \right),
+\end{equation}
+and the speed is
+\begin{equation}
+  v_i(t)=v_0\psi_E(E_i(t))\psi_\mu(\mu_i(t)),
+\end{equation}
+where
+\begin{equation}
+  \psi_\mu(\mu)=
+  \begin{cases}
+  1, & \mu=\mathrm{search},\\
+  v_{\mathrm{exploit}}, & \mu=\mathrm{exploit},\\
+  0, & \mu=\mathrm{dormant}.
+  \end{cases}
+\end{equation}
+The proposed movement is
+\begin{equation}
+  \tilde p_i(t+\Delta t)=p_i(t)+v_i(t)\Delta t\,u(\theta_i(t+\Delta t)).
+\end{equation}
+Boundary handling is either wrapping modulo $(W,H)$ or reflection with heading
+updates. If the proposed point enters an obstacle cell, movement is rejected and
+the heading is rotated:
+\begin{equation}
+  \theta_i(t+\Delta t)\leftarrow
+  \operatorname{wrap}\left(\theta_i(t+\Delta t)+\pi+\eta_i\right),
+  \qquad \eta_i\sim U(-\pi/4,\pi/4).
+\end{equation}
+
+\section{Search versus Exploit Decision}
+The logistic sigmoid is
+\begin{equation}
+  \sigma(x)=\frac{1}{1+\exp(-x)}.
+\end{equation}
+The energy sufficiency score is
+\begin{equation}
+  P_i^E(t)=
+  \sigma\left(k_E\left[\frac{E_i(t)}{E_{\max}}-\theta_E\right]\right),
+\end{equation}
+and the signal exploitation score is
+\begin{equation}
+  P_i^S(t)=
+  \sigma\left(k_S\left[S_i^{\max}(t)-\tau_S\right]\right).
+\end{equation}
+The probability of broad searching is
+\begin{equation}
+  P_i^{\mathrm{search}}(t)=P_i^E(t)\left[1-P_i^S(t)\right].
+\end{equation}
+The mode update is
+\begin{equation}
+  \mu_i(t+\Delta t)=
+  \begin{cases}
+  \mathrm{dormant}, &
+  \frac{E_i(t)}{E_{\max}}<\theta_{\mathrm{dormant}}
+  \text{ and } S_i^{\max}(t)<\tau_S,\\
+  \mathrm{search}, & U_i(t)<P_i^{\mathrm{search}}(t),\\
+  \mathrm{exploit}, & \text{otherwise},
+  \end{cases}
+\end{equation}
+where $U_i(t)\sim U(0,1)$.
+When the optional ``continue searching without food'' switch is enabled and no
+active food sources remain, non-dormant agents are forced into search mode. This
+keeps the population exploring depleted environments instead of merely following
+stale trail.
+
+\section{Food Consumption}
+Agent $i$ can eat food source $k$ if
+\begin{equation}
+  \|p_i(t)-f_k\|_2\le r_{\mathrm{eat}}+r_{F,k}.
+\end{equation}
+The raw demand is
+\begin{equation}
+  d_{ik}(t)=b_{\max}\Delta t\,
+  \mathbf{1}[a_i(t)=1]\,
+  \mathbf{1}[\mu_i(t)\ne\mathrm{dormant}]\,
+  \mathbf{1}[\|p_i(t)-f_k\|_2\le r_{\mathrm{eat}}+r_{F,k}].
+\end{equation}
+If multiple agents request the same food source, calories are allocated
+proportionally:
+\begin{equation}
+  b_{ik}(t)=
+  \begin{cases}
+  d_{ik}(t)\min\left(1,\frac{C_k(t)}{\sum_j d_{jk}(t)+\varepsilon}\right),
+  & \sum_j d_{jk}(t)>0,\\
+  0, & \sum_j d_{jk}(t)=0.
+  \end{cases}
+\end{equation}
+Total eaten from food source $k$ is
+\begin{equation}
+  B_k(t)=\sum_i b_{ik}(t),
+\end{equation}
+and food calories update by
+\begin{equation}
+  C_k(t+\Delta t)=\max(0,C_k(t)-B_k(t)).
+\end{equation}
+The energy gained by agent $i$ is
+\begin{equation}
+  G_i^{\mathrm{food}}(t)=\eta_{\mathrm{food}}\sum_{k=1}^{M(t)}q_kb_{ik}(t).
+\end{equation}
+The direct implementation checks distances between agents and each active food
+source. This is $O(NM)$ per consumption update, which is acceptable for the
+moderate number of food sources targeted by the interactive app.
+
+\section{Energy Budget}
+The metabolic cost is
+\begin{equation}
+  L_i^{\mathrm{base}}(t)=c_{\mathrm{base}}m_i(t)\Delta t.
+\end{equation}
+The movement distance is
+\begin{equation}
+  \Delta s_i(t)=\|p_i(t+\Delta t)-p_i(t)\|_2,
+\end{equation}
+and movement cost is
+\begin{equation}
+  L_i^{\mathrm{move}}(t)=c_{\mathrm{move}}m_i(t)\Delta s_i(t).
+\end{equation}
+Trail-deposition cost is
+\begin{equation}
+  L_i^{\mathrm{trail}}(t)=c_{\mathrm{trail}}q_i^T(t).
+\end{equation}
+Dormant cost is
+\begin{equation}
+  L_i^{\mathrm{dormant}}(t)=c_{\mathrm{dormant}}m_i(t)\Delta t.
+\end{equation}
+Total cost is
+\begin{equation}
+  L_i(t)=L_i^{\mathrm{base}}+L_i^{\mathrm{move}}+
+  L_i^{\mathrm{trail}}+\mathbf{1}[\mu_i=\mathrm{dormant}]L_i^{\mathrm{dormant}}.
+\end{equation}
+Energy before growth is
+\begin{equation}
+  \hat E_i(t+\Delta t)=
+  E_i(t)+G_i^{\mathrm{food}}(t)-L_i(t),
+\end{equation}
+followed by clipping:
+\begin{equation}
+  \hat E_i(t+\Delta t)\leftarrow
+  \operatorname{clip}\left(\hat E_i(t+\Delta t),0,E_{\max}\right).
+\end{equation}
+
+\section{Growth and Division}
+Growth is possible only when energy is above a threshold. With
+$[x]_+=\max(x,0)$, the specific growth rate is
+\begin{equation}
+  r_i^g(t)=r_g
+  \left[\frac{\hat E_i(t+\Delta t)}{E_{\max}}-\theta_g\right]_+.
+\end{equation}
+Mass increase is
+\begin{equation}
+  \Delta m_i(t)=r_i^g(t)m_i(t)\Delta t,
+\end{equation}
+and growth energy cost is
+\begin{equation}
+  L_i^{\mathrm{growth}}(t)=c_{\mathrm{growth}}\Delta m_i(t).
+\end{equation}
+The pre-division mass and energy are
+\begin{align}
+  \tilde m_i(t+\Delta t)&=m_i(t)+\Delta m_i(t),\\
+  \tilde E_i(t+\Delta t)&=
+  \operatorname{clip}\left(\hat E_i(t+\Delta t)-L_i^{\mathrm{growth}}(t),0,E_{\max}\right).
+\end{align}
+If $\tilde E_i(t+\Delta t)>E_{\mathrm{split}}$ and $N(t)<N_{\max}$, then the
+agent divides. The child position is
+\begin{equation}
+  p_j(t+\Delta t)=p_i(t+\Delta t)+\epsilon_p,\qquad
+  \epsilon_p\sim\mathcal{N}(0,\sigma_{\mathrm{split}}^2I_2).
+\end{equation}
+The child heading is
+\begin{equation}
+  \theta_j(t+\Delta t)=
+  \operatorname{wrap}\left(\theta_i(t+\Delta t)+U(-\pi,\pi)\right).
+\end{equation}
+Energy and mass are split evenly:
+\begin{equation}
+  E_i(t+\Delta t)=E_j(t+\Delta t)=\frac{1}{2}\tilde E_i(t+\Delta t),
+\end{equation}
+\begin{equation}
+  m_i(t+\Delta t)=m_j(t+\Delta t)=\frac{1}{2}\tilde m_i(t+\Delta t).
+\end{equation}
+If more agents are eligible than the remaining capacity, eligible agents are
+randomly selected until $N_{\max}$ is reached.
+
+\section{Death and Dormancy}
+If
+\begin{equation}
+  E_i(t+\Delta t)\le E_{\mathrm{death}},
+\end{equation}
+the user-selected policy is applied. Under the remove policy,
+\begin{equation}
+  a_i(t+\Delta t)=0.
+\end{equation}
+Under the dormant policy,
+\begin{equation}
+  \mu_i(t+\Delta t)=\mathrm{dormant},\qquad E_i(t+\Delta t)=0.
+\end{equation}
+The default is removal for visual clarity.
+
+\section{Adaptive Physarum Transport Network}
+At selected intervals, the simulator builds a graph
+\begin{equation}
+  G_t=(V_t,E_t).
+\end{equation}
+Nodes include a nest node, active food nodes, optional high-trail landmarks, and
+optional support nodes. The nest is the energy-weighted colony center:
+\begin{equation}
+  c_t=\frac{\sum_i a_i(t)E_i(t)p_i(t)}{\sum_i a_i(t)E_i(t)+\varepsilon}.
+\end{equation}
+If all agents are dead, the previous colony center or geometric center is used.
+Edges are constructed by $k$-nearest-neighbor links, with optional Delaunay-like
+links when available. Obstacle-crossing edges can be rejected by line sampling.
+Each edge $e=(u,v)$ has length
+\begin{equation}
+  \ell_e=\|x_u-x_v\|_2,
+\end{equation}
+conductance $D_e(t)>0$, signed flow $Q_e(t)$, and path cost $c_e(t)$.
+
+\section{Pressure, Flow, and Conductance Dynamics}
+Edges are oriented arbitrarily. The incidence matrix is
+\begin{equation}
+  B_{ve}=
+  \begin{cases}
+  +1, & v=\mathrm{head}(e),\\
+  -1, & v=\mathrm{tail}(e),\\
+  0, & \text{otherwise}.
+  \end{cases}
+\end{equation}
+The hydraulic coefficient is
+\begin{equation}
+  g_e(t)=\frac{D_e(t)}{\ell_e+\varepsilon},
+\end{equation}
+and
+\begin{equation}
+  G_D(t)=\operatorname{diag}(g_e(t)).
+\end{equation}
+The weighted graph Laplacian is
+\begin{equation}
+  L_D(t)=BG_D(t)B^\top.
+\end{equation}
+The source-sink vector $b(t)$ assigns food nodes positive injection:
+\begin{equation}
+  b_k(t)=I_0\frac{C_k(t)}{\sum_{\ell\in\mathcal{F}_t}C_\ell(t)+\varepsilon},
+\end{equation}
+and the nest is the sink:
+\begin{equation}
+  b_0(t)=-\sum_{k\in\mathcal{F}_t}b_k(t).
+\end{equation}
+Intermediate nodes have $b_v(t)=0$, so $\sum_vb_v(t)=0$.
+
+Pressures solve
+\begin{equation}
+  L_D(t)P(t)=b(t).
+\end{equation}
+Because $L_D$ is singular, the gauge $P_0(t)=0$ is fixed by removing the nest row
+and column. For edge $e=(u,v)$, pressure drop and flow are
+\begin{align}
+  \Delta P_e(t)&=P_u(t)-P_v(t),\\
+  Q_e(t)&=\frac{D_e(t)}{\ell_e+\varepsilon}\left[P_u(t)-P_v(t)\right].
+\end{align}
+Conductance adapts by a discrete Physarum-like tube equation:
+\begin{equation}
+  \frac{dD_e}{dt}=\alpha_D f(|Q_e|)-\mu_DD_e,
+\end{equation}
+where
+\begin{equation}
+  f(q)=\frac{q^\gamma}{q^\gamma+q_0^\gamma+\varepsilon}.
+\end{equation}
+The implemented update is
+\begin{equation}
+  D_e(t+\Delta t)=
+  \max\left(
+  D_{\min},
+  D_e(t)+\Delta t\left[
+  \alpha_Df(|Q_e(t)|)-\mu_DD_e(t)
+  \right]
+  \right).
+\end{equation}
+This adaptive conductance equation is the primary optimization mechanism:
+high-flow edges are reinforced and low-flow edges decay.
+
+\section{Shortest Nutrient Path Overlay}
+After conductance adaptation, the visualization computes Dijkstra shortest
+paths only as an analysis layer. The path cost is
+\begin{equation}
+  c_e^{\mathrm{path}}(t)=\frac{\ell_e}{(D_e(t)+\varepsilon)^\eta}.
+\end{equation}
+The primary food node is
+\begin{equation}
+  k^\star=\arg\max_k C_k(t),
+\end{equation}
+and the overlay path is
+\begin{equation}
+  \pi^\star(t)=\operatorname{Dijkstra}(G_t,v_0,v_{k^\star},c^{\mathrm{path}}).
+\end{equation}
+The geometric path length and weighted path cost are
+\begin{align}
+  L_{\mathrm{path}}(t)&=\sum_{e\in\pi^\star(t)}\ell_e,\\
+  C_{\mathrm{path}}(t)&=\sum_{e\in\pi^\star(t)}c_e^{\mathrm{path}}(t).
+\end{align}
+
+\section{Coupling Between Network and Agent Field}
+The agent and network models are coupled in two directions. First, high-trail
+regions can become landmark nodes in the graph. Second, reinforced network edges
+can be rasterized back into the trail field. For edge $e$, define normalized
+reinforcement
+\begin{equation}
+  R_e(t)=\frac{|Q_e(t)|}{\max_{e'}|Q_{e'}(t)|+\varepsilon}.
+\end{equation}
+Grid cells near the edge receive
+\begin{equation}
+  T_t(x)\leftarrow T_t(x)+
+  \rho_{\mathrm{net}}D_e(t)R_e(t)
+  K_{\sigma_{\mathrm{edge}}}(\operatorname{dist}(x,e)).
+\end{equation}
+This lets flow-carrying network links bias future agent motion through the same
+trail field used by local sensing.
+
+\section{Metrics}
+The simulator tracks:
+\begin{align}
+  N_{\mathrm{alive}}(t)&=\sum_i a_i(t),\\
+  \bar E(t)&=\frac{\sum_i a_i(t)E_i(t)}{N_{\mathrm{alive}}(t)+\varepsilon},\\
+  E_{\mathrm{tot}}(t)&=\sum_i a_i(t)E_i(t),\\
+  M_{\mathrm{bio}}(t)&=\sum_i a_i(t)m_i(t),\\
+  C_{\mathrm{food}}(t)&=\sum_k C_k(t),\\
+  C_{\mathrm{consumed}}(t)&=C_{\mathrm{food}}(0)-C_{\mathrm{food}}(t),\\
+  T_{\mathrm{mass}}(t)&=\sum_{x\in\Omega}T_t(x),\\
+  A_{\mathrm{trail}}(t)&=\#\{x\in\Omega:T_t(x)>\tau_T\}.
+\end{align}
+Trail entropy is
+\begin{equation}
+  H_T(t)=-\sum_x\tilde T_t(x)\log(\tilde T_t(x)+\varepsilon),
+  \qquad
+  \tilde T_t(x)=\frac{T_t(x)}{\sum_yT_t(y)+\varepsilon}.
+\end{equation}
+For the network, the active edge set is
+\begin{equation}
+  E_t^+=\{e\in E_t:D_e(t)>D_{\mathrm{vis}}\}.
+\end{equation}
+Total geometric length and weighted material cost are
+\begin{align}
+  L_{\mathrm{net}}(t)&=\sum_{e\in E_t^+}\ell_e,\\
+  C_{\mathrm{net}}(t)&=\sum_{e\in E_t}\ell_eD_e(t).
+\end{align}
+Average transport distance and efficiency are
+\begin{align}
+  \bar d_{\mathrm{net}}(t)&=
+  \frac{2}{|V_t|(|V_t|-1)}\sum_{u<v}d_{uv}(t),\\
+  \mathcal{E}_{\mathrm{net}}(t)&=
+  \frac{2}{|V_t|(|V_t|-1)}\sum_{u<v}\frac{1}{d_{uv}(t)+\varepsilon}.
+\end{align}
+Disconnected pairs are ignored in the implementation rather than assigned
+infinite distance. Fault tolerance is
+\begin{equation}
+  \mathrm{FT}(t)=
+  \frac{
+  \#\{e\in E_t^+:G_t^+\setminus e\text{ still connects all active food nodes to the nest}\}
+  }{|E_t^+|+\varepsilon}.
+\end{equation}
+
+\section{Parameter Table}
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+Category & Symbol or name & Default \\
+\midrule
+World & $W,H$ & $120,80$ \\
+World & boundary mode & bounce \\
+Agents & initial agents & $800$ \\
+Agents & $N_{\max}$ & $3000$ \\
+Agents & $E_{\max}$ & $100$ \\
+Movement & $v_0$ & $1.0$ \\
+Movement & $v_{\min}$ & $0.2$ \\
+Sensing & $d_s,\alpha,\beta$ & $5.0,0.7,0.35$ \\
+Sensing & $\sigma_\theta$ & $0.5$ \\
+Fields & $w_T,w_A,w_O$ & $1.0,2.5,1000$ \\
+Trail & $q_0,\lambda_T,\sigma_T$ & $1.0,0.04,0.8$ \\
+Food & $r_{\mathrm{eat}},b_{\max},\eta_{\mathrm{food}}$ & $2.5,2.0,0.8$ \\
+Food & $r_F,\sigma_A,C_{1/2}$ & $3.0,10.0,200.0$ \\
+Energy & $c_{\mathrm{base}},c_{\mathrm{move}}$ & $0.03,0.05$ \\
+Growth & $r_g,\theta_g,E_{\mathrm{split}}$ & $0.02,0.65,85.0$ \\
+Search & $k_E,\theta_E,k_S,\tau_S$ & $8.0,0.25,5.0,0.15$ \\
+Network & $I_0,\alpha_D,\mu_D$ & $2.0,1.0,0.08$ \\
+Network & $\gamma,q_0,D_{\min},D_{\mathrm{init}}$ & $1.4,1.0,10^{-4},0.05$ \\
+Network & $\eta,\rho_{\mathrm{net}}$ & $1.0,0.1$ \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+\section{Algorithm Summary}
+Each simulation step performs the following operations:
+\begin{enumerate}
+  \item Recompute the food attractant field from active food sources.
+  \item Form the combined sensory field from trail, food, obstacles, and repellent.
+  \item Sense front, left, and right values for each alive agent using bilinear interpolation.
+  \item Update search, exploit, or dormant mode from energy and local signal.
+  \item Turn, move, handle boundaries, and reject obstacle collisions.
+  \item Deposit, diffuse, decay, and clip trail.
+  \item Consume nearby food with proportional sharing.
+  \item Apply energy gains and costs.
+  \item Apply growth, division, death, or dormancy.
+  \item At network intervals, build or update the graph, solve pressure and flow, adapt conductances, compute Dijkstra overlays, and rasterize network reinforcement into the trail field.
+  \item Record scalar metrics.
+\end{enumerate}
+
+\section{Model Limitations}
+The model is intentionally idealized. It does not resolve detailed cytoplasmic
+streaming, tube wall mechanics, intracellular biochemical oscillations,
+multi-nutrient stoichiometry, humidity, light exposure, microbial competition,
+or laboratory-scale calibration. Food calories are abstract simulation units.
+Agent division is a computational population-control mechanism rather than a
+complete biological account of Physarum growth. The adaptive network solver is
+coupled to the agent field but remains a graph abstraction, not a physical tube
+mesh. Dijkstra paths are diagnostic overlays and should not be interpreted as
+the mechanism that creates the adaptive network.
+
+\section{References}
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}

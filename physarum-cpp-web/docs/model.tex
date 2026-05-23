@@ -1,0 +1,185 @@
+\documentclass[11pt]{article}
+\usepackage{amsmath,amssymb,booktabs,geometry,hyperref,natbib}
+\geometry{margin=1in}
+
+\title{Mathematical Model for Physarum Lab}
+\author{Interactive C++/WebAssembly slime mold simulator}
+\date{\today}
+
+\begin{document}
+\maketitle
+
+\section{Introduction}
+Physarum Lab is an idealized computational simulator inspired by
+\emph{Physarum polycephalum}. It combines a Jones-style particle and trail
+model \citep{Jones2010Pattern}, an energy and growth budget, and a low-frequency
+adaptive nutrient-network overlay motivated by the Tero transport model
+\citep{Tero2007Adaptive}. It is not a calibrated biological model; its purpose
+is interactive exploration of qualitative mechanisms: chemotaxis, food
+depletion, growth, search/exploit switching, and path reinforcement.
+
+\section{State and Notation}
+The domain is a rectangular grid
+\[
+  \Omega=\{0,\dots,W-1\}\times\{0,\dots,H-1\},
+\]
+with continuous agent positions embedded in $[0,W)\times[0,H)$. Agent $i$ has
+\[
+X_i(t)=\bigl(p_i(t),\theta_i(t),E_i(t),m_i(t),\mu_i(t),a_i(t)\bigr),
+\]
+where $p_i=(x_i,y_i)$ is position, $\theta_i$ is heading, $E_i$ is internal
+energy, $m_i$ is biomass, $\mu_i\in\{\mathrm{search},\mathrm{exploit},
+\mathrm{dormant}\}$ is behavior mode, and $a_i$ is alive status.
+
+Food source $k$ has
+\[
+F_k(t)=\bigl(f_k,C_k(t),q_k,\sigma_{A,k},r_k\bigr),
+\]
+where $f_k$ is position, $C_k$ is remaining calories, $q_k$ is quality, and
+$r_k$ is the eating radius. Trail and food fields are $T_t(x,y)$ and
+$A_t(x,y)$.
+
+\section{Food Attractant and Trail}
+Active food creates a saturating attractant field:
+\[
+A_t(x,y)=\sum_k q_k
+\frac{C_k(t)}{C_k(t)+C_{1/2}+\varepsilon}
+\exp\left(-\frac{\|(x,y)-f_k\|^2}{2\sigma_{A,k}^2}\right).
+\]
+Agents deposit trail by bilinear splatting:
+\[
+D_t(x,y)=\sum_{i:a_i=1}q_0m_i(t)\phi_E(E_i)\phi_\mu(\mu_i)K_h((x,y)-p_i(t)),
+\]
+where $\phi_E(E)=\mathrm{clip}(E/E_{\max},0,1)$ and
+\[
+\phi_\mu(\mu)=
+\begin{cases}
+1, & \mu=\mathrm{search},\\
+1.25, & \mu=\mathrm{exploit},\\
+0.15, & \mu=\mathrm{dormant}.
+\end{cases}
+\]
+Trail evolves by diffusion and decay:
+\[
+T_{t+\Delta t}=(1-\lambda_T\Delta t)\left(G_{\sigma_T}*(T_t+D_t)\right).
+\]
+The implementation approximates $G_{\sigma_T}$ with local blur passes for
+interactive speed.
+
+\section{Sensing and Motion}
+The combined sensing field is
+\[
+S_t(x,y)=w_TT_t(x,y)+w_AA_t(x,y)-w_RR_t(x,y)-w_OO(x,y).
+\]
+Let $u(\theta)=(\cos\theta,\sin\theta)^T$. Front, left, and right sensors are
+\[
+z_i^\delta(t)=p_i(t)+d_su(\theta_i(t)+\delta\alpha),
+\qquad \delta\in\{-1,0,+1\}.
+\]
+The agent samples $S_i^\delta=\mathcal I[S_t](z_i^\delta)$ using bilinear
+interpolation. It turns toward the strongest sensor:
+\[
+\Delta\theta_i^{\mathrm{det}}=
+\begin{cases}
++\beta,& S_i^{+1}=\max_\delta S_i^\delta,\\
+-\beta,& S_i^{-1}=\max_\delta S_i^\delta,\\
+0,& S_i^{0}=\max_\delta S_i^\delta.
+\end{cases}
+\]
+
+\section{Search, Exploit, and Dormancy}
+The probability of continuing exploratory search is
+\[
+P_i^{\mathrm{search}}=
+\sigma\left(k_E\left[\frac{E_i}{E_{\max}}-\theta_d\right]\right)
+\left(1-\sigma\left(k_S[S_i^{\max}-\tau_S]\right)\right),
+\]
+clipped to $[0,1]$. High enough energy and weak local signal encourage search;
+strong trail or food signal encourages exploit mode. If energy is very low and
+the signal is weak, the agent enters dormant mode.
+
+Food direction also biases heading:
+\[
+F_i^{\mathrm{food}}=\sum_k
+\frac{\chi(C_k>0)c_k}{\|f_k-p_i\|^2+\varepsilon}
+\frac{f_k-p_i}{\|f_k-p_i\|+\varepsilon},
+\]
+\[
+\rho_i=\mathrm{clip}\left(\|F_i^{\mathrm{food}}\|
+\left(1-\frac{E_i}{E_{\max}}\right)^\eta,0,1\right).
+\]
+The heading is blended toward $\arg(F_i^{\mathrm{food}})$ by $\rho_i$, so
+hungry agents are more food-directed.
+
+\section{Energy, Eating, Growth, Division, Death}
+Energy loss per step is
+\[
+L_i=\Delta t(c_bm_i+c_mv_i^2m_i+c_s\mathbf 1_{\mu_i=\mathrm{search}}).
+\]
+If $\|p_i-f_k\|<r_k$, the food gain is
+\[
+G_{ik}=\min\{C_k,\eta_{\mathrm{eat}}q_k\Delta t\},
+\qquad
+C_k(t+\Delta t)=C_k(t)-\sum_iG_{ik}.
+\]
+Agent energy updates as
+\[
+\hat E_i(t+\Delta t)=
+\mathrm{clip}\left(E_i(t)+\eta_E\sum_kG_{ik}(t)-L_i(t),0,E_{\max}\right).
+\]
+Growth occurs above an energy threshold:
+\[
+\Delta m_i=r_g\left[\frac{\hat E_i}{E_{\max}}-\theta_g\right]_+m_i\Delta t,
+\qquad
+E_i(t+\Delta t)=\hat E_i-\kappa_g\Delta m_i.
+\]
+Agents divide when $m_i>m_{\mathrm{split}}$ and
+$E_i>E_{\mathrm{split}}$. Sustained zero energy for
+$\tau_{\mathrm{dead}}$ steps causes death.
+
+\section{Adaptive Nutrient Network}
+At a lower update frequency, the simulator samples graph nodes from active
+food and trail ridges. Edges connect nearby nodes. Each edge has length
+$\ell_e$ and conductance $D_e$. The motivating continuous model uses
+\[
+C_e(t)=\frac{D_e(t)}{\ell_e+\varepsilon},\qquad
+L_D=B\,\mathrm{diag}(C_e)B^T,
+\]
+\[
+L_D(t)P(t)=b(t),\qquad
+Q_e(t)=C_e(t)(P_u(t)-P_v(t)),
+\]
+with the Tero update
+\[
+\dot D_e=|Q_e|-D_e.
+\]
+The interactive implementation uses a bounded low-frequency variant: edges on
+the current nutrient path are reinforced and all others decay,
+\[
+D_e(t+\Delta t)=\max\left(D_{\min},
+D_e(t)+\Delta t\left[
+\alpha_D\frac{|Q_e|^\gamma}{|Q_e|^\gamma+q_0^\gamma+\varepsilon}
+-\mu_DD_e(t)
+\right]\right).
+\]
+The displayed path uses Dijkstra cost
+\[
+c_e^{\mathrm{path}}=\frac{\ell_e}{(D_e+\varepsilon)^\eta}.
+\]
+Transport cost and dissipation are reported as
+\[
+J_{\mathrm{transport}}=\sum_e \ell_eD_e,\qquad
+\mathcal E_{\mathrm{diss}}=\sum_e \frac{\ell_e}{D_e+\varepsilon}Q_e^2.
+\]
+
+\section{Numerics and Limitations}
+The default browser grid is lower resolution than the display canvas and is
+scaled for rendering. This keeps interactions responsive while preserving the
+qualitative trail dynamics. The current WebAssembly hook mirrors the C++ API;
+when Emscripten is not available, the TypeScript fallback runs the same
+state variables and equations for local development.
+
+\bibliographystyle{plainnat}
+\bibliography{references}
+
+\end{document}
