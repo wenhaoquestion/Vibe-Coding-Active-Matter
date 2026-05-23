@@ -127,10 +127,13 @@ export interface FireflyAdapter {
   addFireflies(x: number, y: number, count: number, radius: number): void;
   eraseFireflies(x: number, y: number, radius: number): void;
   addObstacle(x: number, y: number, radius: number): void;
+  eraseObstacles(x: number, y: number, radius: number): void;
   clearObstacles(): void;
   addCityLight(x: number, y: number, radius: number, epsilon: number, omega: number): void;
+  eraseCityLights(x: number, y: number, radius: number): void;
   clearCityLights(): void;
   addBat(x: number, y: number): void;
+  eraseBats(x: number, y: number, radius: number): void;
   clearBats(): void;
   runScan(kind: ScanKind, min: number, max: number, samples: number, steps: number, burnIn: number, threshold: number): ScanPoint[];
   getSnapshot(): SimSnapshot;

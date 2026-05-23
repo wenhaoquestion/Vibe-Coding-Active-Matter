@@ -124,6 +124,24 @@ void test_bat_capture_and_panic() {
   require(sim.metrics().aliveCount <= 0.0f, "captured firefly is removed from live metrics");
 }
 
+void test_bat_radius_suppresses_flash_and_phase() {
+  Simulation sim;
+  sim.setParam(0, 1);
+  sim.setParam(19, 0);
+  sim.setParam(25, 0);
+  sim.setParam(27, 0);
+  sim.setParam(28, 3.0);
+  sim.reset(31);
+  auto& mutableFireflies = const_cast<std::vector<Firefly>&>(sim.fireflies());
+  mutableFireflies[0].theta = 1.2f;
+  mutableFireflies[0].brightness = 1.0f;
+  const auto first = mutableFireflies[0];
+  sim.addBat(first.x, first.y);
+  sim.step(1);
+  require(std::abs(sim.fireflies()[0].theta - 1.2f) < 1e-5f, "bat perception freezes firefly phase");
+  require(sim.fireflies()[0].brightness == 0.0f, "bat perception suppresses firefly brightness");
+}
+
 }  // namespace
 
 int main() {
@@ -136,6 +154,7 @@ int main() {
     test_scan();
     test_mobility_bounds();
     test_bat_capture_and_panic();
+    test_bat_radius_suppresses_flash_and_phase();
   } catch (const std::exception& err) {
     std::cerr << "C++ test failed: " << err.what() << "\n";
     return 1;

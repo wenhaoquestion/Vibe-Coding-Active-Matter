@@ -9,7 +9,7 @@ interface SimulationCanvasProps {
   showHeatmap: boolean;
   showPhase: boolean;
   onAddFireflies: (x: number, y: number, count: number, radius: number) => void;
-  onEraseFireflies: (x: number, y: number, radius: number) => void;
+  onEraseObjects: (x: number, y: number, radius: number) => void;
   onAddObstacle: (x: number, y: number, radius: number) => void;
   onAddCityLight: (x: number, y: number) => void;
   onAddBat: (x: number, y: number) => void;
@@ -42,7 +42,7 @@ export function SimulationCanvas({
   showHeatmap,
   showPhase,
   onAddFireflies,
-  onEraseFireflies,
+  onEraseObjects,
   onAddObstacle,
   onAddCityLight,
   onAddBat
@@ -188,7 +188,7 @@ export function SimulationCanvas({
     const p = toModel(event);
     const brush = event.shiftKey || event.altKey ? 0.8 : 0.32;
     if (tool === 'add') onAddFireflies(p.x, p.y, event.shiftKey ? 16 : 5, brush);
-    if (tool === 'erase') onEraseFireflies(p.x, p.y, brush);
+    if (tool === 'erase') onEraseObjects(p.x, p.y, brush);
     if (tool === 'obstacle') onAddObstacle(p.x, p.y, params.obstacleRadius);
     if (tool === 'city') onAddCityLight(p.x, p.y);
     if (tool === 'bat') onAddBat(p.x, p.y);

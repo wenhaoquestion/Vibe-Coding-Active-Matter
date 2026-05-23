@@ -164,6 +164,11 @@ void sim_add_obstacle(float x, float y, float radius) {
   syncAll();
 }
 
+void sim_erase_obstacles(float x, float y, float radius) {
+  g_sim.eraseObstacles(x, y, radius);
+  syncAll();
+}
+
 void sim_clear_obstacles() {
   g_sim.clearObstacles();
   syncAll();
@@ -174,6 +179,11 @@ void sim_add_city_light(float x, float y, float radius, float epsilon, float ome
   syncAll();
 }
 
+void sim_erase_city_lights(float x, float y, float radius) {
+  g_sim.eraseCityLights(x, y, radius);
+  syncAll();
+}
+
 void sim_clear_city_lights() {
   g_sim.clearCityLights();
   syncAll();
@@ -181,6 +191,11 @@ void sim_clear_city_lights() {
 
 void sim_add_bat(float x, float y) {
   g_sim.addBat(x, y);
+  syncAll();
+}
+
+void sim_erase_bats(float x, float y, float radius) {
+  g_sim.eraseBats(x, y, radius);
   syncAll();
 }
 

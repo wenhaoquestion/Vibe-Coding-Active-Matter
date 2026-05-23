@@ -11,10 +11,13 @@ type WasmExports = {
   _sim_add_fireflies(x: number, y: number, count: number, radius: number): void;
   _sim_erase_fireflies(x: number, y: number, radius: number): void;
   _sim_add_obstacle(x: number, y: number, radius: number): void;
+  _sim_erase_obstacles(x: number, y: number, radius: number): void;
   _sim_clear_obstacles(): void;
   _sim_add_city_light(x: number, y: number, radius: number, epsilon: number, omega: number): void;
+  _sim_erase_city_lights(x: number, y: number, radius: number): void;
   _sim_clear_city_lights(): void;
   _sim_add_bat(x: number, y: number): void;
+  _sim_erase_bats(x: number, y: number, radius: number): void;
   _sim_clear_bats(): void;
   _sim_run_scan(kind: number, min: number, max: number, samples: number, steps: number, burnIn: number, threshold: number): void;
   _sim_get_firefly_count(): number;
@@ -102,6 +105,10 @@ class WasmFireflyAdapter implements FireflyAdapter {
     this.wasm._sim_add_obstacle(x, y, radius);
   }
 
+  eraseObstacles(x: number, y: number, radius: number): void {
+    this.wasm._sim_erase_obstacles(x, y, radius);
+  }
+
   clearObstacles(): void {
     this.wasm._sim_clear_obstacles();
   }
@@ -110,12 +117,20 @@ class WasmFireflyAdapter implements FireflyAdapter {
     this.wasm._sim_add_city_light(x, y, radius, epsilon, omega);
   }
 
+  eraseCityLights(x: number, y: number, radius: number): void {
+    this.wasm._sim_erase_city_lights(x, y, radius);
+  }
+
   clearCityLights(): void {
     this.wasm._sim_clear_city_lights();
   }
 
   addBat(x: number, y: number): void {
     this.wasm._sim_add_bat(x, y);
+  }
+
+  eraseBats(x: number, y: number, radius: number): void {
+    this.wasm._sim_erase_bats(x, y, radius);
   }
 
   clearBats(): void {

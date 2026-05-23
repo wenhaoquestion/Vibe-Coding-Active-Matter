@@ -175,6 +175,11 @@ export class FallbackFireflyAdapter implements FireflyAdapter {
     this.computeMetrics(0);
   }
 
+  eraseObstacles(x: number, y: number, radius: number): void {
+    this.obstacles = this.obstacles.filter((o) => Math.hypot(o.x - x, o.y - y) > radius + o.radius);
+    this.computeMetrics(0);
+  }
+
   clearObstacles(): void {
     this.obstacles = [];
     this.computeMetrics(0);
@@ -182,6 +187,10 @@ export class FallbackFireflyAdapter implements FireflyAdapter {
 
   addCityLight(x: number, y: number, radius: number, epsilon: number, omega: number): void {
     this.cityLights.push({ x, y, radius, epsilon, omega, phase: this.params.phi_city });
+  }
+
+  eraseCityLights(x: number, y: number, radius: number): void {
+    this.cityLights = this.cityLights.filter((light) => Math.hypot(light.x - x, light.y - y) > radius + light.radius);
   }
 
   clearCityLights(): void {
@@ -204,6 +213,12 @@ export class FallbackFireflyAdapter implements FireflyAdapter {
       hunger: 0
     });
     this.params.batCount = this.bats.length;
+  }
+
+  eraseBats(x: number, y: number, radius: number): void {
+    this.bats = this.bats.filter((bat) => Math.hypot(bat.x - x, bat.y - y) > radius);
+    this.params.batCount = this.bats.length;
+    this.computeMetrics(0);
   }
 
   clearBats(): void {
@@ -289,6 +304,11 @@ export class FallbackFireflyAdapter implements FireflyAdapter {
         next[i] = current.theta;
         continue;
       }
+      if (this.isInsideBatPerception(current)) {
+        next[i] = current.theta;
+        current.neighborCount = 0;
+        continue;
+      }
       let coupling = 0;
       let neighbors = 0;
       for (let j = 0; j < n; j += 1) {
@@ -316,7 +336,7 @@ export class FallbackFireflyAdapter implements FireflyAdapter {
     for (let i = 0; i < n; i += 1) {
       const f = this.fireflies[i];
       f.theta = next[i];
-      f.brightness = f.alive ? this.brightness(f.theta) : 0;
+      f.brightness = f.alive && !this.isInsideBatPerception(f) ? this.brightness(f.theta) : 0;
     }
     this.time += this.params.dt;
     this.computeMetrics(flashCount);
@@ -414,6 +434,11 @@ export class FallbackFireflyAdapter implements FireflyAdapter {
     body.x = Math.max(0, Math.min(this.params.L, body.x));
     body.y = Math.max(0, Math.min(this.params.L, body.y));
     if (Math.abs(body.vx) + Math.abs(body.vy) > 1e-6) body.heading = Math.atan2(body.vy, body.vx);
+  }
+
+  private isInsideBatPerception(firefly: FireflyView): boolean {
+    if (!firefly.alive) return false;
+    return this.bats.some((bat) => Math.hypot(firefly.x - bat.x, firefly.y - bat.y) <= bat.perceptionRadius);
   }
 
   private canSee(a: FireflyView, b: FireflyView): boolean {

@@ -58,10 +58,10 @@ struct Bat {
 };
 
 struct Params {
-  int N = 500;
+  int N = 125;
   float L = 10.0f;
   float K = 2.0f;
-  float R_visual = 2.0f;
+  float R_visual = 1.0f;
   float D = 0.02f;
   float omega0 = 1.0f;
   float sigma_omega = 0.5f;
@@ -125,10 +125,13 @@ class Simulation {
   void addFireflies(float x, float y, int count, float radius);
   void eraseFireflies(float x, float y, float radius);
   void addObstacle(float x, float y, float radius);
+  void eraseObstacles(float x, float y, float radius);
   void clearObstacles();
   void addCityLight(float x, float y, float radius, float epsilon, float omega);
+  void eraseCityLights(float x, float y, float radius);
   void clearCityLights();
   void addBat(float x, float y);
+  void eraseBats(float x, float y, float radius);
   void clearBats();
   void runScan(int kind, float minValue, float maxValue, int samples, int steps, int burnIn, float threshold);
 
@@ -152,6 +155,7 @@ class Simulation {
   void updateBats();
   void updateFireflyMotion();
   void reflectInBounds(float& x, float& y, float& vx, float& vy, float& heading) const;
+  bool isInsideBatPerception(const Firefly& firefly) const;
   float brightness(float theta) const;
   float couplingFor(const Firefly& a, const Firefly& b) const;
   void pushHistory();

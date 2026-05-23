@@ -1,10 +1,10 @@
 import type { SimParams } from './types';
 
 export const defaultParams: SimParams = {
-  N: 500,
+  N: 125,
   L: 10,
   K: 2,
-  R_visual: 2,
+  R_visual: 1,
   D: 0.02,
   omega0: 1,
   sigma_omega: 0.5,
@@ -37,15 +37,15 @@ export const defaultParams: SimParams = {
 };
 
 export const presets: Record<string, Partial<SimParams>> = {
-  'Random Field': { K: 0.4, R_visual: 1.4, D: 0.05, epsilon_city: 0, speciesMode: 1 },
-  'Strong Coupling': { K: 4.2, R_visual: 3.2, D: 0.01, epsilon_city: 0, speciesMode: 1 },
-  'Weak Coupling': { K: 0.6, R_visual: 1.1, D: 0.04, epsilon_city: 0, speciesMode: 1 },
-  'Local Islands': { K: 3.5, R_visual: 1.1, D: 0.015, epsilon_city: 0, speciesMode: 1 },
-  'City Light': { K: 1.3, R_visual: 2.4, D: 0.02, epsilon_city: 1.3, Omega_city: 1.35 },
-  'Forest Barriers': { K: 2.8, R_visual: 2.6, D: 0.02, obstacleRadius: 1.2, blockVisibility: true },
+  'Random Field': { K: 0.4, R_visual: 2.2, D: 0.05, epsilon_city: 0, speciesMode: 1 },
+  'Strong Coupling': { K: 4.2, R_visual: 4.6, D: 0.01, epsilon_city: 0, speciesMode: 1 },
+  'Weak Coupling': { K: 0.6, R_visual: 1.8, D: 0.04, epsilon_city: 0, speciesMode: 1 },
+  'Local Islands': { K: 3.5, R_visual: 1.8, D: 0.015, epsilon_city: 0, speciesMode: 1 },
+  'City Light': { K: 1.3, R_visual: 3.6, D: 0.02, epsilon_city: 1.3, Omega_city: 1.35 },
+  'Forest Barriers': { K: 2.8, R_visual: 3.8, D: 0.02, obstacleRadius: 1.2, blockVisibility: true },
   'Two Species': { K: 2, speciesMode: 2, omega_A: 0.75, omega_B: 1.35, K_in: 2.8, K_out: 0.4 },
   'Predator Avoidance': { mobilityEnabled: true, batCount: 3, v_firefly: 0.32, v_bat: 0.9, R_avoid: 1.6, chi_bat: 1.8, R_bat_perception: 3.2, R_capture: 0.16 },
-  'High Mobility Swarm': { mobilityEnabled: true, batCount: 0, v_firefly: 0.55, D_turn: 0.7, D_move: 0.05, K: 2.2, R_visual: 1.8 }
+  'High Mobility Swarm': { mobilityEnabled: true, batCount: 0, v_firefly: 0.55, D_turn: 0.7, D_move: 0.05, K: 2.2, R_visual: 3.2 }
 };
 
 export const paramIds = {

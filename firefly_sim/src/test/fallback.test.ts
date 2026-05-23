@@ -37,4 +37,16 @@ describe('fallback firefly adapter', () => {
     expect(after.metrics.meanPanic).toBeGreaterThanOrEqual(0);
     expect(after.metrics.capturedCount).toBeGreaterThanOrEqual(0);
   });
+
+  it('suppresses brightness and phase updates inside bat perception radius', async () => {
+    const params = { ...defaultParams, N: 1, mobilityEnabled: false, predationEnabled: false, v_bat: 0, R_bat_perception: 3 };
+    const adapter = new FallbackFireflyAdapter(params);
+    await adapter.init(800, 600, 23, params);
+    const initial = adapter.getSnapshot();
+    adapter.addBat(initial.fireflies[0].x, initial.fireflies[0].y);
+    adapter.step(1);
+    const after = adapter.getSnapshot();
+    expect(after.fireflies[0].theta).toBe(initial.fireflies[0].theta);
+    expect(after.fireflies[0].brightness).toBe(0);
+  });
 });

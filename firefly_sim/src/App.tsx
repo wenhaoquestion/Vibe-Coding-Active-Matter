@@ -185,8 +185,11 @@ export default function App() {
               adapter?.addFireflies(x, y, count, radius);
               syncSnapshotFromAdapter(true);
             }}
-            onEraseFireflies={(x, y, radius) => {
+            onEraseObjects={(x, y, radius) => {
               adapter?.eraseFireflies(x, y, radius);
+              adapter?.eraseObstacles(x, y, radius);
+              adapter?.eraseCityLights(x, y, radius);
+              adapter?.eraseBats(x, y, radius);
               syncSnapshotFromAdapter(true);
             }}
             onAddObstacle={(x, y, radius) => {

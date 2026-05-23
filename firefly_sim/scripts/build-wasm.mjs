@@ -24,7 +24,7 @@ const args = [
   '-sENVIRONMENT=web',
   '-sALLOW_MEMORY_GROWTH=1',
   '-sEXPORTED_RUNTIME_METHODS=["HEAPF32"]',
-  '-sEXPORTED_FUNCTIONS=["_sim_init","_sim_reset","_sim_step","_sim_set_param","_sim_add_fireflies","_sim_erase_fireflies","_sim_add_obstacle","_sim_clear_obstacles","_sim_add_city_light","_sim_clear_city_lights","_sim_add_bat","_sim_clear_bats","_sim_run_scan","_sim_get_firefly_count","_sim_get_obstacle_count","_sim_get_city_light_count","_sim_get_bat_count","_sim_get_time_series_count","_sim_get_scan_count","_sim_get_estimated_kc","_sim_get_time","_sim_get_firefly_ptr","_sim_get_obstacle_ptr","_sim_get_city_light_ptr","_sim_get_bat_ptr","_sim_get_metrics_ptr","_sim_get_time_series_ptr","_sim_get_scan_results_ptr"]',
+  '-sEXPORTED_FUNCTIONS=["_sim_init","_sim_reset","_sim_step","_sim_set_param","_sim_add_fireflies","_sim_erase_fireflies","_sim_add_obstacle","_sim_erase_obstacles","_sim_clear_obstacles","_sim_add_city_light","_sim_erase_city_lights","_sim_clear_city_lights","_sim_add_bat","_sim_erase_bats","_sim_clear_bats","_sim_run_scan","_sim_get_firefly_count","_sim_get_obstacle_count","_sim_get_city_light_count","_sim_get_bat_count","_sim_get_time_series_count","_sim_get_scan_count","_sim_get_estimated_kc","_sim_get_time","_sim_get_firefly_ptr","_sim_get_obstacle_ptr","_sim_get_city_light_ptr","_sim_get_bat_ptr","_sim_get_metrics_ptr","_sim_get_time_series_ptr","_sim_get_scan_results_ptr"]',
   '-o',
   output
 ];

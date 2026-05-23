@@ -53,9 +53,9 @@ export function ControlPanel({ params, seed, onParamsChange, onSeedChange, onPre
         <span>Seed</span>
         <input type="number" value={seed} onChange={(event) => onSeedChange(Number(event.target.value) || 1)} />
       </label>
-      <NumberSlider label="N" value={params.N} min={50} max={1600} step={50} onChange={(value) => update('N', value)} />
+      <NumberSlider label="N" value={params.N} min={25} max={1000} step={25} onChange={(value) => update('N', value)} />
       <NumberSlider label="K" value={params.K} min={0} max={6} step={0.05} onChange={(value) => update('K', value)} />
-      <NumberSlider label="R_visual" value={params.R_visual} min={0.3} max={5} step={0.05} onChange={(value) => update('R_visual', value)} />
+      <NumberSlider label="R_visual" value={params.R_visual} min={0.3} max={8} step={0.05} onChange={(value) => update('R_visual', value)} />
       <NumberSlider label="D" value={params.D} min={0} max={0.25} step={0.005} onChange={(value) => update('D', value)} />
       <NumberSlider label="omega0" value={params.omega0} min={0.2} max={2.5} step={0.05} onChange={(value) => update('omega0', value)} />
       <NumberSlider label="sigma_omega" value={params.sigma_omega} min={0} max={1.5} step={0.05} onChange={(value) => update('sigma_omega', value)} />

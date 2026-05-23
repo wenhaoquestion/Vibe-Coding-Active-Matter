@@ -158,6 +158,14 @@ void Simulation::addObstacle(float x, float y, float radius) {
   computeMetrics(0.0f);
 }
 
+void Simulation::eraseObstacles(float x, float y, float radius) {
+  obstacles_.erase(std::remove_if(obstacles_.begin(), obstacles_.end(), [&](const Obstacle& obstacle) {
+                     return distance(obstacle.x, obstacle.y, x, y) <= radius + obstacle.radius;
+                   }),
+                   obstacles_.end());
+  computeMetrics(0.0f);
+}
+
 void Simulation::clearObstacles() {
   obstacles_.clear();
   computeMetrics(0.0f);
@@ -165,6 +173,13 @@ void Simulation::clearObstacles() {
 
 void Simulation::addCityLight(float x, float y, float radius, float epsilon, float omega) {
   cityLights_.push_back({clamp(x, 0.0f, params_.L), clamp(y, 0.0f, params_.L), std::max(0.01f, radius), epsilon, omega, params_.phi_city, 1});
+}
+
+void Simulation::eraseCityLights(float x, float y, float radius) {
+  cityLights_.erase(std::remove_if(cityLights_.begin(), cityLights_.end(), [&](const CityLight& light) {
+                       return distance(light.x, light.y, x, y) <= radius + light.radius;
+                     }),
+                     cityLights_.end());
 }
 
 void Simulation::clearCityLights() {
@@ -185,6 +200,15 @@ void Simulation::addBat(float x, float y) {
   bat.captureRadius = params_.R_capture;
   bats_.push_back(bat);
   params_.batCount = static_cast<int>(bats_.size());
+}
+
+void Simulation::eraseBats(float x, float y, float radius) {
+  bats_.erase(std::remove_if(bats_.begin(), bats_.end(), [&](const Bat& bat) {
+                return distance(bat.x, bat.y, x, y) <= radius;
+              }),
+              bats_.end());
+  params_.batCount = static_cast<int>(bats_.size());
+  computeMetrics(0.0f);
 }
 
 void Simulation::clearBats() {
@@ -448,6 +472,15 @@ void Simulation::updateFireflyMotion() {
   }
 }
 
+bool Simulation::isInsideBatPerception(const Firefly& firefly) const {
+  if (!firefly.alive) return false;
+  for (const auto& bat : bats_) {
+    if (!bat.active) continue;
+    if (distance(firefly.x, firefly.y, bat.x, bat.y) <= bat.perceptionRadius) return true;
+  }
+  return false;
+}
+
 void Simulation::stepOnce(bool record) {
   updateBats();
   updateFireflyMotion();
@@ -458,6 +491,11 @@ void Simulation::stepOnce(bool record) {
     const auto& current = fireflies_[i];
     if (!current.alive) {
       next[i] = current.theta;
+      continue;
+    }
+    if (isInsideBatPerception(current)) {
+      next[i] = current.theta;
+      fireflies_[i].neighborCount = 0;
       continue;
     }
     float coupling = 0.0f;
@@ -481,7 +519,7 @@ void Simulation::stepOnce(bool record) {
   }
   for (std::size_t i = 0; i < fireflies_.size(); ++i) {
     fireflies_[i].theta = next[i];
-    fireflies_[i].brightness = fireflies_[i].alive ? brightness(next[i]) : 0.0f;
+    fireflies_[i].brightness = fireflies_[i].alive && !isInsideBatPerception(fireflies_[i]) ? brightness(next[i]) : 0.0f;
   }
   time_ += params_.dt;
   computeMetrics(flashes);
