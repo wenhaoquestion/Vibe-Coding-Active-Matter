@@ -142,6 +142,61 @@ void test_bat_radius_suppresses_flash_and_phase() {
   require(sim.fireflies()[0].brightness == 0.0f, "bat perception suppresses firefly brightness");
 }
 
+void test_firefly_moves_probabilistically_unless_chased() {
+  Simulation still;
+  still.setParam(0, 1);
+  still.setParam(19, 1);
+  still.setParam(20, 1.0);
+  still.setParam(21, 0.0);
+  still.setParam(22, 0.0);
+  still.setParam(31, 0.0);
+  still.reset(41);
+  const float x0 = still.fireflies()[0].x;
+  const float y0 = still.fireflies()[0].y;
+  still.step(10);
+  require(std::abs(still.fireflies()[0].x - x0) < 1e-6f && std::abs(still.fireflies()[0].y - y0) < 1e-6f, "zero move probability keeps unchased firefly stationary");
+
+  Simulation chased;
+  chased.setParam(0, 1);
+  chased.setParam(19, 1);
+  chased.setParam(20, 1.0);
+  chased.setParam(21, 0.0);
+  chased.setParam(22, 0.0);
+  chased.setParam(25, 0.0);
+  chased.setParam(27, 0.0);
+  chased.setParam(28, 3.0);
+  chased.setParam(31, 0.0);
+  chased.reset(42);
+  const float cx0 = chased.fireflies()[0].x;
+  const float cy0 = chased.fireflies()[0].y;
+  chased.addBat(cx0, cy0);
+  chased.step(1);
+  require(std::hypot(chased.fireflies()[0].x - cx0, chased.fireflies()[0].y - cy0) > 1e-5f, "bat pressure forces movement even when move probability is zero");
+}
+
+void test_overlapping_bats_diverge_with_softmax_strategy() {
+  Simulation sim;
+  sim.setParam(0, 0);
+  sim.setParam(26, 0);
+  sim.setParam(27, 1.0);
+  sim.setParam(28, 10.0);
+  sim.setParam(32, 0.8);
+  sim.setParam(33, 3);
+  sim.setParam(34, 0.01);
+  sim.setParam(35, 0.01);
+  sim.setParam(36, 1.0);
+  sim.setParam(37, 1.2);
+  sim.reset(51);
+  sim.addFireflies(2.0f, 5.0f, 1, 0.0f);
+  sim.addFireflies(5.0f, 2.0f, 1, 0.0f);
+  sim.addFireflies(8.0f, 5.0f, 1, 0.0f);
+  sim.addBat(5.0f, 5.0f);
+  sim.addBat(5.0f, 5.0f);
+  sim.step(25);
+  require(sim.bats().size() == 2, "test keeps two bats");
+  require(std::hypot(sim.bats()[0].x - sim.bats()[1].x, sim.bats()[0].y - sim.bats()[1].y) > 1e-4f, "overlapping bats separate instead of remaining identical");
+}
+
 }  // namespace
 
 int main() {
@@ -155,6 +210,8 @@ int main() {
     test_mobility_bounds();
     test_bat_capture_and_panic();
     test_bat_radius_suppresses_flash_and_phase();
+    test_firefly_moves_probabilistically_unless_chased();
+    test_overlapping_bats_diverge_with_softmax_strategy();
   } catch (const std::exception& err) {
     std::cerr << "C++ test failed: " << err.what() << "\n";
     return 1;

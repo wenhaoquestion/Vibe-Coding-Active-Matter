@@ -49,4 +49,49 @@ describe('fallback firefly adapter', () => {
     expect(after.fireflies[0].theta).toBe(initial.fireflies[0].theta);
     expect(after.fireflies[0].brightness).toBe(0);
   });
+
+  it('keeps unchased fireflies stationary unless bat pressure forces movement', async () => {
+    const stillParams = { ...defaultParams, N: 1, mobilityEnabled: true, moveProbability: 0, D_turn: 0, D_move: 0, v_firefly: 1 };
+    const still = new FallbackFireflyAdapter(stillParams);
+    await still.init(800, 600, 29, stillParams);
+    const beforeStill = still.getSnapshot().fireflies[0];
+    still.step(5);
+    const afterStill = still.getSnapshot().fireflies[0];
+    expect(afterStill.x).toBe(beforeStill.x);
+    expect(afterStill.y).toBe(beforeStill.y);
+
+    const chasedParams = { ...stillParams, predationEnabled: false, v_bat: 0, R_bat_perception: 3 };
+    const chased = new FallbackFireflyAdapter(chasedParams);
+    await chased.init(800, 600, 30, chasedParams);
+    const beforeChased = chased.getSnapshot().fireflies[0];
+    chased.addBat(beforeChased.x, beforeChased.y);
+    chased.step(1);
+    const afterChased = chased.getSnapshot().fireflies[0];
+    expect(Math.hypot(afterChased.x - beforeChased.x, afterChased.y - beforeChased.y)).toBeGreaterThan(0);
+  });
+
+  it('separates overlapping bats with softmax strategy parameters', async () => {
+    const params = {
+      ...defaultParams,
+      N: 1,
+      batCount: 0,
+      v_bat: 1,
+      R_bat_perception: 10,
+      batSoftmaxTemperature: 0.8,
+      batTopK: 3,
+      batDecisionMin: 0.01,
+      batDecisionMax: 0.01,
+      batSeparationRadius: 1,
+      batSeparationStrength: 1.2
+    };
+    const adapter = new FallbackFireflyAdapter(params);
+    await adapter.init(800, 600, 33, params);
+    adapter.addFireflies(2, 5, 1, 0);
+    adapter.addFireflies(8, 5, 1, 0);
+    adapter.addBat(5, 5);
+    adapter.addBat(5, 5);
+    adapter.step(25);
+    const bats = adapter.getSnapshot().bats;
+    expect(Math.hypot(bats[0].x - bats[1].x, bats[0].y - bats[1].y)).toBeGreaterThan(0);
+  });
 });

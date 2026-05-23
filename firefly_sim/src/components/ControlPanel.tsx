@@ -104,6 +104,7 @@ export function ControlPanel({ params, seed, onParamsChange, onSeedChange, onPre
         <input type="checkbox" checked={params.mobilityEnabled} onChange={(event) => update('mobilityEnabled', event.target.checked)} />
         Move fireflies
       </label>
+      <NumberSlider label="move prob" value={params.moveProbability} min={0} max={1} step={0.01} onChange={(value) => update('moveProbability', value)} />
       <NumberSlider label="v_firefly" value={params.v_firefly} min={0} max={1.2} step={0.02} onChange={(value) => update('v_firefly', value)} />
       <NumberSlider label="D_turn" value={params.D_turn} min={0} max={2} step={0.05} onChange={(value) => update('D_turn', value)} />
       <NumberSlider label="D_move" value={params.D_move} min={0} max={0.2} step={0.005} onChange={(value) => update('D_move', value)} />
@@ -120,6 +121,13 @@ export function ControlPanel({ params, seed, onParamsChange, onSeedChange, onPre
       <NumberSlider label="R_avoid" value={params.R_avoid} min={0.1} max={4} step={0.05} onChange={(value) => update('R_avoid', value)} />
       <NumberSlider label="chi_bat" value={params.chi_bat} min={0} max={4} step={0.05} onChange={(value) => update('chi_bat', value)} />
       <NumberSlider label="bat noise" value={params.batTurnNoise} min={0} max={2} step={0.05} onChange={(value) => update('batTurnNoise', value)} />
+      <NumberSlider label="softmax T" value={params.batSoftmaxTemperature} min={0.05} max={2} step={0.05} onChange={(value) => update('batSoftmaxTemperature', value)} />
+      <NumberSlider label="top-k" value={params.batTopK} min={1} max={8} step={1} onChange={(value) => update('batTopK', value)} />
+      <NumberSlider label="decision min" value={params.batDecisionMin} min={0.05} max={2} step={0.05} onChange={(value) => update('batDecisionMin', value)} />
+      <NumberSlider label="decision max" value={params.batDecisionMax} min={0.05} max={3} step={0.05} onChange={(value) => update('batDecisionMax', value)} />
+      <NumberSlider label="bat sep R" value={params.batSeparationRadius} min={0.05} max={2} step={0.05} onChange={(value) => update('batSeparationRadius', value)} />
+      <NumberSlider label="bat sep" value={params.batSeparationStrength} min={0} max={3} step={0.05} onChange={(value) => update('batSeparationStrength', value)} />
+      <NumberSlider label="chase noise" value={params.batChaseNoise} min={0} max={1} step={0.02} onChange={(value) => update('batChaseNoise', value)} />
       <button onClick={onClearBats}>Clear bats</button>
     </section>
   );

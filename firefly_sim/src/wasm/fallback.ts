@@ -143,7 +143,7 @@ export class FallbackFireflyAdapter implements FireflyAdapter {
       }
     }
     for (const bat of this.bats) {
-      bat.speed = params.v_bat;
+      bat.speed = params.v_bat * bat.speedBias;
       bat.perceptionRadius = params.R_bat_perception;
       bat.captureRadius = params.R_capture;
     }
@@ -210,7 +210,14 @@ export class FallbackFireflyAdapter implements FireflyAdapter {
       perceptionRadius: this.params.R_bat_perception,
       captureRadius: this.params.R_capture,
       targetIndex: -1,
-      hunger: 0
+      hunger: 0,
+      speedBias: 0.85 + 0.3 * this.rng.next(),
+      turnRate: 0.14 + 0.2 * this.rng.next(),
+      decisionTimer: 0,
+      decisionInterval: this.params.batDecisionMin + (this.params.batDecisionMax - this.params.batDecisionMin) * this.rng.next(),
+      brightnessWeight: 0.7 + 0.6 * this.rng.next(),
+      distanceWeight: 0.1 + 0.35 * this.rng.next(),
+      noisePhase: this.rng.next() * TWO_PI
     });
     this.params.batCount = this.bats.length;
   }
@@ -345,32 +352,75 @@ export class FallbackFireflyAdapter implements FireflyAdapter {
 
   private updateBats(): void {
     const turnScale = Math.sqrt(Math.max(0, 2 * this.params.batTurnNoise * this.params.dt));
-    for (const bat of this.bats) {
-      bat.speed = this.params.v_bat;
+    for (let batIndex = 0; batIndex < this.bats.length; batIndex += 1) {
+      const bat = this.bats[batIndex];
+      bat.speed = this.params.v_bat * bat.speedBias;
       bat.perceptionRadius = this.params.R_bat_perception;
       bat.captureRadius = this.params.R_capture;
-      bat.targetIndex = -1;
-      let bestScore = -1;
-      for (let i = 0; i < this.fireflies.length; i += 1) {
-        const f = this.fireflies[i];
-        if (!f.alive) continue;
-        const d = Math.hypot(f.x - bat.x, f.y - bat.y);
-        if (d > bat.perceptionRadius) continue;
-        const score = f.brightness / (d + 0.05);
-        if (score > bestScore) {
-          bestScore = score;
-          bat.targetIndex = i;
+
+      bat.decisionTimer -= this.params.dt;
+      const target = bat.targetIndex >= 0 ? this.fireflies[bat.targetIndex] : undefined;
+      const targetValid = Boolean(target?.alive && Math.hypot(target.x - bat.x, target.y - bat.y) <= bat.perceptionRadius);
+      if (bat.decisionTimer <= 0 || !targetValid) {
+        const candidates: Array<{ score: number; index: number }> = [];
+        for (let i = 0; i < this.fireflies.length; i += 1) {
+          const f = this.fireflies[i];
+          if (!f.alive) continue;
+          const d = Math.hypot(f.x - bat.x, f.y - bat.y);
+          if (d > bat.perceptionRadius) continue;
+          const invD = 1 / (d + 0.05);
+          candidates.push({ score: bat.brightnessWeight * f.brightness * invD + bat.distanceWeight * invD + 0.02 * this.rng.next(), index: i });
         }
+        if (candidates.length === 0) {
+          bat.targetIndex = -1;
+        } else {
+          candidates.sort((a, b) => b.score - a.score);
+          const top = candidates.slice(0, Math.max(1, Math.min(this.params.batTopK, candidates.length)));
+          const maxScore = top[0].score;
+          const weights = top.map((candidate) => Math.exp((candidate.score - maxScore) / this.params.batSoftmaxTemperature));
+          const total = weights.reduce((sum, weight) => sum + weight, 0);
+          let pick = this.rng.next() * total;
+          bat.targetIndex = top[top.length - 1].index;
+          for (let i = 0; i < top.length; i += 1) {
+            pick -= weights[i];
+            if (pick <= 0) {
+              bat.targetIndex = top[i].index;
+              break;
+            }
+          }
+        }
+        bat.decisionInterval = this.params.batDecisionMin + (this.params.batDecisionMax - this.params.batDecisionMin) * this.rng.next();
+        bat.decisionTimer = bat.decisionInterval;
+      }
+
+      let sepX = 0;
+      let sepY = 0;
+      for (let otherIndex = 0; otherIndex < this.bats.length; otherIndex += 1) {
+        if (otherIndex === batIndex) continue;
+        const other = this.bats[otherIndex];
+        let dx = bat.x - other.x;
+        let dy = bat.y - other.y;
+        let d = Math.hypot(dx, dy);
+        if (d >= this.params.batSeparationRadius) continue;
+        if (d < 1e-4) {
+          const angle = bat.noisePhase + otherIndex;
+          dx = Math.cos(angle);
+          dy = Math.sin(angle);
+          d = 1;
+        }
+        const weight = 1 - d / Math.max(this.params.batSeparationRadius, 1e-6);
+        sepX += this.params.batSeparationStrength * weight * dx / d;
+        sepY += this.params.batSeparationStrength * weight * dy / d;
       }
       if (bat.targetIndex >= 0) {
-        const target = this.fireflies[bat.targetIndex];
-        const desired = Math.atan2(target.y - bat.y, target.x - bat.x);
-        bat.heading = wrapPhase(bat.heading + signedWrap(desired - bat.heading) * 0.22);
+        const chaseTarget = this.fireflies[bat.targetIndex];
+        const desired = Math.atan2(chaseTarget.y - bat.y, chaseTarget.x - bat.x) + this.params.batChaseNoise * this.rng.normal();
+        bat.heading = wrapPhase(bat.heading + signedWrap(desired - bat.heading) * bat.turnRate);
       } else {
         bat.heading = wrapPhase(bat.heading + turnScale * this.rng.normal());
       }
-      bat.vx = Math.cos(bat.heading) * bat.speed;
-      bat.vy = Math.sin(bat.heading) * bat.speed;
+      bat.vx = Math.cos(bat.heading) * bat.speed + sepX;
+      bat.vy = Math.sin(bat.heading) * bat.speed + sepY;
       bat.x += bat.vx * this.params.dt;
       bat.y += bat.vy * this.params.dt;
       this.reflectInBounds(bat);
@@ -386,10 +436,12 @@ export class FallbackFireflyAdapter implements FireflyAdapter {
       let avoidX = 0;
       let avoidY = 0;
       let panic = 0;
+      let batPressure = false;
       for (const bat of this.bats) {
         const dx = f.x - bat.x;
         const dy = f.y - bat.y;
         const d = Math.hypot(dx, dy);
+        if (d <= bat.perceptionRadius) batPressure = true;
         if (d < this.params.R_avoid) {
           const weight = 1 - d / Math.max(this.params.R_avoid, 1e-6);
           avoidX += this.params.chi_bat * weight * dx / (d + 1e-4);
@@ -404,7 +456,8 @@ export class FallbackFireflyAdapter implements FireflyAdapter {
       }
       if (!f.alive) continue;
       f.panic = panic;
-      if (this.params.mobilityEnabled) {
+      const shouldMove = this.params.mobilityEnabled && (batPressure || this.rng.next() < this.params.moveProbability);
+      if (shouldMove) {
         f.heading = wrapPhase(f.heading + turnScale * this.rng.normal());
         f.speed = this.params.v_firefly;
         f.vx = Math.cos(f.heading) * f.speed + avoidX + moveScale * this.rng.normal();
@@ -412,6 +465,9 @@ export class FallbackFireflyAdapter implements FireflyAdapter {
         f.x += f.vx * this.params.dt;
         f.y += f.vy * this.params.dt;
         this.reflectInBounds(f);
+      } else {
+        f.vx = 0;
+        f.vy = 0;
       }
     }
   }

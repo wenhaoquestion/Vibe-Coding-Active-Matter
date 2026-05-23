@@ -54,6 +54,13 @@ struct Bat {
   float captureRadius = 0.15f;
   int targetIndex = -1;
   float hunger = 0.0f;
+  float speedBias = 1.0f;
+  float turnRate = 0.22f;
+  float decisionTimer = 0.0f;
+  float decisionInterval = 0.5f;
+  float brightnessWeight = 1.0f;
+  float distanceWeight = 0.25f;
+  float noisePhase = 0.0f;
   std::uint8_t active = 1;
 };
 
@@ -61,7 +68,7 @@ struct Params {
   int N = 125;
   float L = 10.0f;
   float K = 2.0f;
-  float R_visual = 1.0f;
+  float R_visual = 2.0f;
   float D = 0.02f;
   float omega0 = 1.0f;
   float sigma_omega = 0.5f;
@@ -77,7 +84,8 @@ struct Params {
   float K_in = 2.4f;
   float K_out = 0.8f;
   int flashMode = 2;
-  bool mobilityEnabled = false;
+  bool mobilityEnabled = true;
+  float moveProbability = 0.1f;
   float v_firefly = 0.25f;
   float D_turn = 0.35f;
   float D_move = 0.02f;
@@ -89,6 +97,13 @@ struct Params {
   float R_bat_perception = 2.8f;
   float R_capture = 0.16f;
   float batTurnNoise = 0.25f;
+  float batSoftmaxTemperature = 0.35f;
+  int batTopK = 3;
+  float batDecisionMin = 0.25f;
+  float batDecisionMax = 0.9f;
+  float batSeparationRadius = 0.6f;
+  float batSeparationStrength = 0.8f;
+  float batChaseNoise = 0.12f;
 };
 
 struct Metrics {

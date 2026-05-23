@@ -25,6 +25,7 @@ export interface SimParams {
   K_in: number;
   K_out: number;
   mobilityEnabled: boolean;
+  moveProbability: number;
   v_firefly: number;
   D_turn: number;
   D_move: number;
@@ -36,6 +37,13 @@ export interface SimParams {
   R_bat_perception: number;
   R_capture: number;
   batTurnNoise: number;
+  batSoftmaxTemperature: number;
+  batTopK: number;
+  batDecisionMin: number;
+  batDecisionMax: number;
+  batSeparationRadius: number;
+  batSeparationStrength: number;
+  batChaseNoise: number;
 }
 
 export interface Metrics {
@@ -98,6 +106,13 @@ export interface BatView {
   captureRadius: number;
   targetIndex: number;
   hunger: number;
+  speedBias: number;
+  turnRate: number;
+  decisionTimer: number;
+  decisionInterval: number;
+  brightnessWeight: number;
+  distanceWeight: number;
+  noisePhase: number;
 }
 
 export interface ScanPoint {

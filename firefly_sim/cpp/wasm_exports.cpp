@@ -61,10 +61,10 @@ void syncCityLights() {
 
 void syncBats() {
   const auto& bats = g_sim.bats();
-  g_batBuffer.resize(bats.size() * 10);
+  g_batBuffer.resize(bats.size() * 17);
   for (std::size_t i = 0; i < bats.size(); ++i) {
     const auto& b = bats[i];
-    const std::size_t off = i * 10;
+    const std::size_t off = i * 17;
     g_batBuffer[off] = b.x;
     g_batBuffer[off + 1] = b.y;
     g_batBuffer[off + 2] = b.vx;
@@ -75,6 +75,13 @@ void syncBats() {
     g_batBuffer[off + 7] = b.captureRadius;
     g_batBuffer[off + 8] = static_cast<float>(b.targetIndex);
     g_batBuffer[off + 9] = b.hunger;
+    g_batBuffer[off + 10] = b.speedBias;
+    g_batBuffer[off + 11] = b.turnRate;
+    g_batBuffer[off + 12] = b.decisionTimer;
+    g_batBuffer[off + 13] = b.decisionInterval;
+    g_batBuffer[off + 14] = b.brightnessWeight;
+    g_batBuffer[off + 15] = b.distanceWeight;
+    g_batBuffer[off + 16] = b.noisePhase;
   }
 }
 

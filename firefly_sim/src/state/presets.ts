@@ -4,12 +4,12 @@ export const defaultParams: SimParams = {
   N: 125,
   L: 10,
   K: 2,
-  R_visual: 1,
+  R_visual: 2,
   D: 0.02,
   omega0: 1,
   sigma_omega: 0.5,
   dt: 0.01,
-  speed: 5,
+  speed: 1,
   sigma_flash: 0.25,
   flashMode: 'spike',
   epsilon_city: 0,
@@ -23,6 +23,7 @@ export const defaultParams: SimParams = {
   K_in: 2.4,
   K_out: 0.8,
   mobilityEnabled: true,
+  moveProbability: 0.1,
   v_firefly: 0.25,
   D_turn: 0.35,
   D_move: 0.02,
@@ -33,7 +34,14 @@ export const defaultParams: SimParams = {
   v_bat: 0.8,
   R_bat_perception: 2.8,
   R_capture: 0.16,
-  batTurnNoise: 0.25
+  batTurnNoise: 0.25,
+  batSoftmaxTemperature: 0.35,
+  batTopK: 3,
+  batDecisionMin: 0.25,
+  batDecisionMax: 0.9,
+  batSeparationRadius: 0.6,
+  batSeparationStrength: 0.8,
+  batChaseNoise: 0.12
 };
 
 export const presets: Record<string, Partial<SimParams>> = {
@@ -79,5 +87,13 @@ export const paramIds = {
   v_bat: 27,
   R_bat_perception: 28,
   R_capture: 29,
-  batTurnNoise: 30
+  batTurnNoise: 30,
+  moveProbability: 31,
+  batSoftmaxTemperature: 32,
+  batTopK: 33,
+  batDecisionMin: 34,
+  batDecisionMax: 35,
+  batSeparationRadius: 36,
+  batSeparationStrength: 37,
+  batChaseNoise: 38
 } as const;

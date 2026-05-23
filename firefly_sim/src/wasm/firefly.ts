@@ -209,16 +209,23 @@ class WasmFireflyAdapter implements FireflyAdapter {
     const start = this.wasm._sim_get_bat_ptr() / 4;
     const heap = this.wasm.HEAPF32;
     return Array.from({ length: count }, (_, i) => ({
-      x: heap[start + i * 10],
-      y: heap[start + i * 10 + 1],
-      vx: heap[start + i * 10 + 2],
-      vy: heap[start + i * 10 + 3],
-      heading: heap[start + i * 10 + 4],
-      speed: heap[start + i * 10 + 5],
-      perceptionRadius: heap[start + i * 10 + 6],
-      captureRadius: heap[start + i * 10 + 7],
-      targetIndex: heap[start + i * 10 + 8],
-      hunger: heap[start + i * 10 + 9]
+      x: heap[start + i * 17],
+      y: heap[start + i * 17 + 1],
+      vx: heap[start + i * 17 + 2],
+      vy: heap[start + i * 17 + 3],
+      heading: heap[start + i * 17 + 4],
+      speed: heap[start + i * 17 + 5],
+      perceptionRadius: heap[start + i * 17 + 6],
+      captureRadius: heap[start + i * 17 + 7],
+      targetIndex: heap[start + i * 17 + 8],
+      hunger: heap[start + i * 17 + 9],
+      speedBias: heap[start + i * 17 + 10],
+      turnRate: heap[start + i * 17 + 11],
+      decisionTimer: heap[start + i * 17 + 12],
+      decisionInterval: heap[start + i * 17 + 13],
+      brightnessWeight: heap[start + i * 17 + 14],
+      distanceWeight: heap[start + i * 17 + 15],
+      noisePhase: heap[start + i * 17 + 16]
     }));
   }
 

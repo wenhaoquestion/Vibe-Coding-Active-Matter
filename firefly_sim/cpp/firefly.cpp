@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <numeric>
+#include <utility>
 
 namespace firefly {
 namespace {
@@ -104,6 +105,14 @@ void Simulation::setParam(int paramId, double value) {
     case 28: params_.R_bat_perception = std::max(0.01f, static_cast<float>(value)); break;
     case 29: params_.R_capture = std::max(0.01f, static_cast<float>(value)); break;
     case 30: params_.batTurnNoise = std::max(0.0f, static_cast<float>(value)); break;
+    case 31: params_.moveProbability = clamp(static_cast<float>(value), 0.0f, 1.0f); break;
+    case 32: params_.batSoftmaxTemperature = std::max(0.01f, static_cast<float>(value)); break;
+    case 33: params_.batTopK = std::max(1, std::min(8, static_cast<int>(value))); break;
+    case 34: params_.batDecisionMin = std::max(0.01f, static_cast<float>(value)); break;
+    case 35: params_.batDecisionMax = std::max(params_.batDecisionMin, static_cast<float>(value)); break;
+    case 36: params_.batSeparationRadius = std::max(0.01f, static_cast<float>(value)); break;
+    case 37: params_.batSeparationStrength = std::max(0.0f, static_cast<float>(value)); break;
+    case 38: params_.batChaseNoise = std::max(0.0f, static_cast<float>(value)); break;
     default: break;
   }
   if (!fireflies_.empty() && static_cast<int>(fireflies_.size()) != params_.N) {
@@ -198,6 +207,13 @@ void Simulation::addBat(float x, float y) {
   bat.vy = std::sin(heading) * params_.v_bat;
   bat.perceptionRadius = params_.R_bat_perception;
   bat.captureRadius = params_.R_capture;
+  bat.speedBias = 0.85f + 0.3f * uniform_(rng_);
+  bat.turnRate = 0.14f + 0.2f * uniform_(rng_);
+  bat.decisionInterval = params_.batDecisionMin + (params_.batDecisionMax - params_.batDecisionMin) * uniform_(rng_);
+  bat.decisionTimer = uniform_(rng_) * bat.decisionInterval;
+  bat.brightnessWeight = 0.7f + 0.6f * uniform_(rng_);
+  bat.distanceWeight = 0.1f + 0.35f * uniform_(rng_);
+  bat.noisePhase = uniform_(rng_) * kTwoPi;
   bats_.push_back(bat);
   params_.batCount = static_cast<int>(bats_.size());
 }
@@ -399,33 +415,75 @@ void Simulation::reflectInBounds(float& x, float& y, float& vx, float& vy, float
 void Simulation::updateBats() {
   if (bats_.empty()) return;
   const float turnScale = std::sqrt(std::max(0.0f, 2.0f * params_.batTurnNoise * params_.dt));
-  for (auto& bat : bats_) {
+  for (std::size_t batIndex = 0; batIndex < bats_.size(); ++batIndex) {
+    auto& bat = bats_[batIndex];
     if (!bat.active) continue;
-    bat.speed = params_.v_bat;
+    bat.speed = params_.v_bat * bat.speedBias;
     bat.perceptionRadius = params_.R_bat_perception;
     bat.captureRadius = params_.R_capture;
-    bat.targetIndex = -1;
-    float bestScore = -1.0f;
-    for (std::size_t i = 0; i < fireflies_.size(); ++i) {
-      const auto& f = fireflies_[i];
-      if (!f.alive) continue;
-      const float d = distance(bat.x, bat.y, f.x, f.y);
-      if (d > bat.perceptionRadius) continue;
-      const float score = f.brightness / (d + 0.05f);
-      if (score > bestScore) {
-        bestScore = score;
-        bat.targetIndex = static_cast<int>(i);
+
+    bat.decisionTimer -= params_.dt;
+    const bool targetValid = bat.targetIndex >= 0 && bat.targetIndex < static_cast<int>(fireflies_.size()) && fireflies_[bat.targetIndex].alive &&
+                             distance(bat.x, bat.y, fireflies_[bat.targetIndex].x, fireflies_[bat.targetIndex].y) <= bat.perceptionRadius;
+    if (bat.decisionTimer <= 0.0f || !targetValid) {
+      std::vector<std::pair<float, int>> candidates;
+      for (std::size_t i = 0; i < fireflies_.size(); ++i) {
+        const auto& f = fireflies_[i];
+        if (!f.alive) continue;
+        const float d = distance(bat.x, bat.y, f.x, f.y);
+        if (d > bat.perceptionRadius) continue;
+        const float invD = 1.0f / (d + 0.05f);
+        candidates.push_back({bat.brightnessWeight * f.brightness * invD + bat.distanceWeight * invD + 0.02f * uniform_(rng_), static_cast<int>(i)});
       }
+      if (candidates.empty()) {
+        bat.targetIndex = -1;
+      } else {
+        std::sort(candidates.begin(), candidates.end(), [](const auto& a, const auto& b) { return a.first > b.first; });
+        const int topCount = std::min(params_.batTopK, static_cast<int>(candidates.size()));
+        const float maxScore = candidates.front().first;
+        float weightSum = 0.0f;
+        for (int i = 0; i < topCount; ++i) weightSum += std::exp((candidates[i].first - maxScore) / params_.batSoftmaxTemperature);
+        float pick = uniform_(rng_) * weightSum;
+        bat.targetIndex = candidates[topCount - 1].second;
+        for (int i = 0; i < topCount; ++i) {
+          pick -= std::exp((candidates[i].first - maxScore) / params_.batSoftmaxTemperature);
+          if (pick <= 0.0f) {
+            bat.targetIndex = candidates[i].second;
+            break;
+          }
+        }
+      }
+      bat.decisionInterval = params_.batDecisionMin + (params_.batDecisionMax - params_.batDecisionMin) * uniform_(rng_);
+      bat.decisionTimer = bat.decisionInterval;
+    }
+
+    float sepX = 0.0f;
+    float sepY = 0.0f;
+    for (std::size_t otherIndex = 0; otherIndex < bats_.size(); ++otherIndex) {
+      if (otherIndex == batIndex || !bats_[otherIndex].active) continue;
+      float dx = bat.x - bats_[otherIndex].x;
+      float dy = bat.y - bats_[otherIndex].y;
+      float d = std::sqrt(dx * dx + dy * dy);
+      if (d >= params_.batSeparationRadius) continue;
+      if (d < 1e-4f) {
+        const float angle = bat.noisePhase + static_cast<float>(otherIndex);
+        dx = std::cos(angle);
+        dy = std::sin(angle);
+        d = 1.0f;
+      }
+      const float weight = 1.0f - d / std::max(params_.batSeparationRadius, 1e-6f);
+      sepX += params_.batSeparationStrength * weight * dx / d;
+      sepY += params_.batSeparationStrength * weight * dy / d;
     }
     if (bat.targetIndex >= 0) {
       const auto& target = fireflies_[bat.targetIndex];
-      const float desired = std::atan2(target.y - bat.y, target.x - bat.x);
-      bat.heading = wrapPhase(bat.heading + signedWrap(desired - bat.heading) * 0.22f);
+      const float desired = std::atan2(target.y - bat.y, target.x - bat.x) + params_.batChaseNoise * normal_(rng_);
+      bat.heading = wrapPhase(bat.heading + signedWrap(desired - bat.heading) * bat.turnRate);
     } else {
       bat.heading = wrapPhase(bat.heading + turnScale * normal_(rng_));
     }
-    bat.vx = std::cos(bat.heading) * bat.speed;
-    bat.vy = std::sin(bat.heading) * bat.speed;
+    bat.vx = std::cos(bat.heading) * bat.speed + sepX;
+    bat.vy = std::sin(bat.heading) * bat.speed + sepY;
     bat.x += bat.vx * params_.dt;
     bat.y += bat.vy * params_.dt;
     reflectInBounds(bat.x, bat.y, bat.vx, bat.vy, bat.heading);
@@ -441,11 +499,13 @@ void Simulation::updateFireflyMotion() {
     float avoidX = 0.0f;
     float avoidY = 0.0f;
     float panic = 0.0f;
+    bool batPressure = false;
     for (const auto& bat : bats_) {
       if (!bat.active) continue;
       const float dx = f.x - bat.x;
       const float dy = f.y - bat.y;
       const float d = std::sqrt(dx * dx + dy * dy);
+      if (d <= bat.perceptionRadius) batPressure = true;
       if (d < params_.R_avoid) {
         const float weight = 1.0f - d / std::max(params_.R_avoid, 1e-6f);
         avoidX += params_.chi_bat * weight * dx / (d + 1e-4f);
@@ -460,7 +520,8 @@ void Simulation::updateFireflyMotion() {
     }
     if (!f.alive) continue;
     f.panic = panic;
-    if (params_.mobilityEnabled) {
+    const bool shouldMove = params_.mobilityEnabled && (batPressure || uniform_(rng_) < params_.moveProbability);
+    if (shouldMove) {
       f.heading = wrapPhase(f.heading + turnScale * normal_(rng_));
       f.speed = params_.v_firefly;
       f.vx = std::cos(f.heading) * f.speed + avoidX + moveScale * normal_(rng_);
@@ -468,6 +529,9 @@ void Simulation::updateFireflyMotion() {
       f.x += f.vx * params_.dt;
       f.y += f.vy * params_.dt;
       reflectInBounds(f.x, f.y, f.vx, f.vy, f.heading);
+    } else {
+      f.vx = 0.0f;
+      f.vy = 0.0f;
     }
   }
 }
